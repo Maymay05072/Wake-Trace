@@ -1,0 +1,40 @@
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[project]
+name = "waketrace"
+version = "0.1.0a1"
+description = "A lightweight-continuity wake runtime for relational AI companions."
+readme = "README.md"
+license = "PolyForm-Noncommercial-1.0.0"
+requires-python = ">=3.11"
+authors = [
+  { name = "May" },
+  { name = "Abyss" },
+  { name = "Chezi" },
+]
+dependencies = [
+  "fastapi>=0.115,<1",
+  "httpx>=0.27,<1",
+  "pydantic>=2.8,<3",
+  "pydantic-settings>=2.4,<3",
+  "uvicorn>=0.30,<1",
+]
+
+[project.optional-dependencies]
+webpush = ["pywebpush>=2,<3"]
+dev = ["pytest>=8,<9", "ruff>=0.6,<1"]
+
+[project.scripts]
+waketrace = "waketrace.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/waketrace"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
