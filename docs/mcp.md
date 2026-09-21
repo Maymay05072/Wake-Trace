@@ -57,8 +57,9 @@ WAKETRACE_SCHEDULER_ENABLED=false
 WAKETRACE_MCP_ALLOW_WAKE=true
 ```
 
-`prepare` 会检查频率、每日上限和跨进程锁，并领取一个生活事件；`finish` 才会消费事件、写入行径并计算
-下一次醒来。若任务中途失败，`abort` 会归还事件。领取也有 15 分钟租约，避免永久卡死。
+`prepare` 会检查 `next_wake_at`、最短间隔、每日上限和跨进程锁，并领取一个生活事件；`finish` 才会
+消费事件、写入行径并计算下一次醒来。尚未到点时会返回 `not_due` 与 `retry_at`。若任务中途失败，
+`abort` 会归还事件。领取也有 15 分钟租约，避免永久卡死。
 
 ## 远程访问
 

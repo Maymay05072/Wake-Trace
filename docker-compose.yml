@@ -4,6 +4,11 @@ services:
     restart: unless-stopped
     env_file:
       - .env
+    environment:
+      # Keep container data and bundled Web assets on their fixed container paths.
+      # These values intentionally override the source-development paths in .env.example.
+      WAKETRACE_DB_PATH: /data/waketrace.db
+      WAKETRACE_WEB_DIST_PATH: /app/web/dist/client
     ports:
       - "127.0.0.1:8765:8765"
     volumes:

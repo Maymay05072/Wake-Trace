@@ -88,16 +88,60 @@ Docker 容器，同时继续使用一份 SQLite 数据，不另建一套“记�
 
 ### Docker（推荐）
 
-Docker 方式只有一个容器。Web、API 和 MCP 共用 `8765` 端口，SQLite 位于宿主机的 `./data/`：
+需要 Git、Docker 与 Docker Compose v2。Docker 方式只有一个容器，Web、API 和 MCP 共用 `8765`
+端口，SQLite 持久化在宿主机的 `./data/`。
+
+先下载仓库：
 
 ```bash
+git clone https://github.com/Maymay05072/Wake-Trace.git
+cd Wake-Trace
 cp .env.example .env
-# 编辑 .env，填写模型配置、管理员令牌和 Web 只读令牌；使用 MCP 时再填写独立 MCP 令牌
+```
+
+Windows PowerShell 可将最后一行换成：
+
+```powershell
+Copy-Item .env.example .env
+```
+
+使用下面的跨平台命令生成随机令牌；执行三次，分别填写为管理员、Web 与 MCP 令牌，不要互相复用：
+
+```bash
+python -c "import secrets; print(secrets.token_urlsafe(32))"
+```
+
+至少修改 `.env` 中这些项目：
+
+```env
+WAKETRACE_API_KEY=你的模型密钥
+WAKETRACE_API_BASE_URL=https://你的模型服务/v1/chat/completions
+WAKETRACE_MODEL=模型名称
+WAKETRACE_ADMIN_TOKEN=第一枚随机令牌
+WAKETRACE_WEB_TOKEN=第二枚随机令牌
+WAKETRACE_MCP_TOKEN=第三枚随机令牌
+WAKETRACE_COMPANION_NAME=小机名称
+WAKETRACE_USER_NAME=你的名字
+WAKETRACE_TIMEZONE=Asia/Shanghai
+```
+
+不使用 MCP 时可以暂时留空 MCP Token。随后启动：
+
+```bash
 docker compose up -d --build
 ```
 
 打开 <http://127.0.0.1:8765>。Compose 默认只绑定本机；需要跨设备访问时，请在前面放置 HTTPS
 反向代理或私有网络，并同步配置允许的 MCP Host，不要直接把 `8765` 暴露到公网。
+
+第一次打开 Web 后，在“设置”中填写小机名称和 Web 只读令牌。同容器部署时 WakeTrace 地址保持当前
+页面地址即可。用下面的命令确认后端已经启动：
+
+```bash
+curl http://127.0.0.1:8765/health
+```
+
+正常结果中应包含 `"status":"ok"` 与当前版本号。
 
 查看状态与日志：
 
@@ -106,17 +150,27 @@ docker compose ps
 docker compose logs -f waketrace
 ```
 
-升级时重新拉取代码并执行 `docker compose up -d --build`。`./data/` 不会随容器重建而丢失。
+Compose 会强制把容器数据库写到 `/data/waketrace.db`，对应宿主机的 `./data/waketrace.db`；重新构建
+容器不会删除这里的数据。
 
 ### Python
 
-需要 Python 3.11 或更高版本。
+需要 Python 3.11 或更高版本。以下命令默认已经进入刚刚克隆的仓库目录：
 
 ```bash
 python -m venv .venv
 source .venv/bin/activate
 pip install -e '.[dev,webpush]'
 cp .env.example .env
+```
+
+Windows PowerShell 使用：
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -e ".[dev,webpush]"
+Copy-Item .env.example .env
 ```
 
 至少填写以下配置：
@@ -144,6 +198,18 @@ waketrace run
 调度器会优先领取已经到期的生活事件；没有事件时，才提供一个带本地时段信息的自由窗口。
 失败的醒来不会消费事件，领取租约到期后也会自动恢复，因此多个入口并存时不容易漏掉生活信号。
 
+如果希望像 Docker 一样，在一个进程中同时运行调度器、API、MCP 和已经构建好的 Web，请先构建前端：
+
+```bash
+cd web
+npm ci
+npm run build
+cd ..
+waketrace start --host 127.0.0.1 --port 8765
+```
+
+`waketrace run` 只运行调度器；`waketrace serve` 只运行 API 与 MCP；`waketrace start` 才是一体化入口。
+
 ### 没有 PWA 也可以使用
 
 PWA 只是我们自用系统选择的一个展示与通知出口，不是 WakeTrace 的前置条件。完全没有前端时，可以让
@@ -166,6 +232,10 @@ waketrace timeline --json
 主动消息送到邮件、Telegram、Discord、ntfy 或桌面通知。`Notifier` 只负责消息送达；行径与线头可以
 直接通过仓库自带的 Web 界面查看。更多接入方式见
 [没有 PWA 时怎样使用](docs/integration-guide.md#没有-pwa-时怎样使用)。
+
+需要特别注意：仓库内置的 Web 是行径查看器，不负责接收主动聊天消息。没有配置 Web Push 订阅或自己的
+`Notifier` 时，模型选择 `message` 也无法真正送达，WakeTrace 会把它安全地降为私人 `trace`，经历仍可
+在 Web 或时间线中查看。Web Push 后端是可选能力，浏览器订阅创建与提交需要由宿主 PWA 实现。
 
 在本机启动带鉴权的控制接口：
 
@@ -244,6 +314,20 @@ curl -X POST http://127.0.0.1:8765/world/events \
 MCP 地址是 `http://127.0.0.1:8765/mcp`，使用 `WAKETRACE_MCP_TOKEN` 作为 Bearer Token。它不是模型
 API 代理，也不会接管第三方聊天客户端的每一轮请求。
 
+不同客户端的配置界面名称可能不同，核心配置都是 MCP URL 与 Authorization Header，例如：
+
+```json
+{
+  "url": "https://trace.example.com/mcp",
+  "headers": {
+    "Authorization": "Bearer 你的独立MCP令牌"
+  }
+}
+```
+
+云端客户端无法访问你电脑上的 `127.0.0.1`。接入 ChatGPT、Claude 等远程客户端时，必须先通过 HTTPS
+反向代理、可信隧道或私有网络提供可访问地址，并配置 `WAKETRACE_MCP_ALLOWED_HOSTS`。
+
 - Kelivo、RikkaHub、Operit 等 API 客户端继续直接连接原来的模型 API；需要时通过 MCP 读取近期行径，
   或由用户明确调用“交回生活”。它们不需要再设置一套定时唤醒。
 - ChatGPT 与 Claude 的官方客户端可以把 WakeTrace 配成远程 MCP；若客户端自身提供定时任务，可把它
@@ -267,6 +351,73 @@ WAKETRACE_MCP_ALLOW_WAKE=true
 定时任务每次必须先调用 `waketrace_prepare_wake`，然后恰好调用一次 `waketrace_finish_wake` 或
 `waketrace_abort_wake`。定时任务只提供机会，是否到点、是否静默、何时再次醒来仍由 WakeTrace 判断。
 完整工具表、权限边界和客户端提示词见 [MCP 接入指南](docs/mcp.md)。
+
+## 配置参考
+
+所有配置都使用 `WAKETRACE_` 前缀，并可写入 `.env`。下面列出 2.0 的主要配置：
+
+| 配置 | 默认值 | 作用 |
+| --- | --- | --- |
+| `API_KEY` | 空 | OpenAI 风格模型接口密钥；自主醒来必填 |
+| `API_BASE_URL` | 示例地址 | Chat Completions 接口地址 |
+| `MODEL` | `your-model-name` | 模型名称 |
+| `ADMIN_TOKEN` | 空 | 管理员 API 令牌 |
+| `WEB_TOKEN` | 空 | Web 只读令牌 |
+| `MCP_TOKEN` | 空 | MCP Bearer Token |
+| `MCP_ALLOW_WRITE` | `false` | 允许 MCP 投递事件和显式聊天交接 |
+| `MCP_ALLOW_WAKE` | `false` | 允许外部客户端完成醒来 |
+| `MCP_ALLOWED_HOSTS` | 仅本机 | MCP Host 允许列表，英文逗号分隔 |
+| `SCHEDULER_ENABLED` | `true` | 是否启用容器内调度器 |
+| `DB_PATH` | `./data/waketrace.db` | SQLite 路径；Docker 中固定为 `/data/waketrace.db` |
+| `WEB_DIST_PATH` | `./web/dist/client` | 已构建 Web 静态文件目录 |
+| `WEB_ORIGINS` | 空 | 分离部署 Web 时的 CORS 来源，英文逗号分隔 |
+| `COMPANION_NAME` | `Companion` | 小机名称，用于提示与通知标题 |
+| `USER_NAME` | `User` | 使用者名称 |
+| `TIMEZONE` | `UTC` | IANA 时区，例如 `Asia/Shanghai` |
+| `TEMPERATURE` | `0.7` | 模型温度 |
+| `MAX_TOKENS` | `1200` | 单次模型输出上限 |
+| `MAX_TOOL_ROUNDS` | `4` | 一次醒来的最大工具轮数 |
+| `RECENT_FACT_LIMIT` | `8` | 下一次醒来读取的近期事实数量 |
+| `RESIDUE_TTL_HOURS` | `24` | 轻余念有效时间 |
+| `MIN_INTERVAL_MINUTES` | `30` | 日间最短醒来间隔 |
+| `MAX_INTERVAL_MINUTES` | `120` | 动态醒来窗口上限 |
+| `NIGHT_MIN_INTERVAL_MINUTES` | `120` | 夜间最短醒来间隔 |
+| `MAX_WAKES_PER_DAY` | `15` | 每日成功醒来上限 |
+| `QUIET_HOURS_START` | `23` | 静默时段开始小时 |
+| `QUIET_HOURS_END` | `7` | 静默时段结束小时 |
+| `VAPID_PRIVATE_KEY` | 空 | 可选 Web Push 私钥 |
+| `VAPID_CLAIMS_EMAIL` | 示例邮箱 | Web Push VAPID 联系地址 |
+
+例如完整变量名是 `WAKETRACE_TIMEZONE`，而不是表格中的简写 `TIMEZONE`。布尔值使用 `true` 或 `false`。
+
+## 升级、备份与恢复
+
+升级前先停止服务并备份整个 `data/` 目录；SQLite 采用 WAL 模式，只复制单个数据库文件可能遗漏尚未合并
+的数据，因此不要在服务运行时直接复制。
+
+```bash
+docker compose stop waketrace
+cp -a data "data-backup-$(date +%Y%m%d-%H%M%S)"
+git pull --ff-only
+docker compose up -d --build
+```
+
+Windows 可以在停止容器后，直接用资源管理器复制整个 `data` 文件夹。恢复时先停止服务，用备份目录替换
+当前 `data/`，再执行 `docker compose up -d`。不要把生产数据库提交到 Git。
+
+## 常见问题
+
+- **`/health` 无法访问**：运行 `docker compose ps` 和 `docker compose logs -f waketrace` 查看启动错误。
+- **醒来一直失败**：确认 `API_KEY`、`API_BASE_URL` 和 `MODEL` 与供应商要求一致；健康检查成功不代表
+  模型配置一定正确。
+- **Web 一直展示示例行径**：确认设置中的 WakeTrace 地址和 Web 只读令牌；分离部署时检查
+  `WEB_ORIGINS`。
+- **接口返回 401**：确认没有把管理员、Web 与 MCP 三种令牌混用。
+- **接口返回 503**：对应入口需要的令牌还没有在后端配置。
+- **MCP 返回 421 或 Host 错误**：把反向代理对外使用的域名加入 `MCP_ALLOWED_HOSTS`。
+- **`prepare_wake` 返回 `not_due`**：这是正常节律控制，等待返回的 `retry_at` 后再试。
+- **没有收到主动消息**：检查是否配置了真实 `Notifier` 或 Web Push 订阅；否则消息会保留为私人行径。
+- **Python 一体化启动后没有网页**：先在 `web/` 执行 `npm ci && npm run build`，或单独运行 Vite 开发服务。
 
 ## 生活世界层
 
@@ -311,6 +462,7 @@ registry.register(
 - [从唤醒核心到一整个生活世界](docs/integration-guide.md)
 - [MCP 接入指南](docs/mcp.md)
 - [最终结果协议](docs/protocol.md)
+- [更新记录](CHANGELOG.md)
 
 ## 项目来源
 
