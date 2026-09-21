@@ -8,6 +8,7 @@ from fastapi import Depends, FastAPI, Header, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, field_validator
 
+from . import __version__
 from .config import Settings
 from .engine import WakeEngine
 from .lifeworld import build_lifeworld_tools
@@ -85,7 +86,7 @@ def create_app(settings: Settings | None = None, engine: WakeEngine | None = Non
 
     @app.get("/health")
     def health() -> dict[str, str]:
-        return {"status": "ok"}
+        return {"status": "ok", "version": __version__}
 
     @app.get("/status", dependencies=[Depends(authorize_admin)])
     def status() -> dict[str, Any]:

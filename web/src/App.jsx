@@ -233,7 +233,7 @@ function ThreadsPage({ threads, loading }) {
   </section>;
 }
 
-function SettingsPage({ settings, saveSettings }) {
+function SettingsPage({ settings, saveSettings, serverVersion, setServerVersion }) {
   const [draft, setDraft] = useState(settings);
   const [showToken, setShowToken] = useState(false);
   const [connection, setConnection] = useState(settings.apiBase ? "idle" : "empty");
@@ -243,8 +243,14 @@ function SettingsPage({ settings, saveSettings }) {
   const testConnection = async () => {
     if (!cleanBaseUrl(draft.apiBase)) { setConnection("empty"); return; }
     setConnection("testing");
-    try { const response = await fetch(`${cleanBaseUrl(draft.apiBase)}/health`); setConnection(response.ok ? "ok" : "error"); }
-    catch { setConnection("error"); }
+    try {
+      const response = await fetch(`${cleanBaseUrl(draft.apiBase)}/health`);
+      if (!response.ok) throw new Error("health request failed");
+      const data = await response.json();
+      setServerVersion(data.version || "未知");
+      setConnection("ok");
+    }
+    catch { setServerVersion("未知"); setConnection("error"); }
   };
   const submit = (event) => { event.preventDefault(); saveSettings({ ...draft, apiBase: cleanBaseUrl(draft.apiBase) }); setSaved(true); };
   const statusText = { empty: "尚未配置", idle: "等待测试", testing: "正在连接…", ok: "已连接", error: "连接失败" }[connection];
@@ -269,7 +275,7 @@ function SettingsPage({ settings, saveSettings }) {
     </section>
     <div className="save-row"><button type="submit" className="primary-button">保存设置</button>{saved && <span role="status">设置已保存</span>}</div>
     <section className="form-section about-section"><div className="section-title"><h2>关于</h2></div><dl>
-      <div><dt>WakeTrace 版本</dt><dd>0.1.0-alpha</dd></div><div><dt>开源许可</dt><dd>PolyForm Noncommercial 1.0.0</dd></div>
+      <div><dt>WakeTrace 版本</dt><dd>{serverVersion}</dd></div><div><dt>开源许可</dt><dd>PolyForm Noncommercial 1.0.0</dd></div>
     </dl></section>
   </form></section>;
 }
@@ -283,8 +289,19 @@ export function App() {
   const [detailOpen, setDetailOpen] = useState(false);
   const [threads, setThreads] = useState([]);
   const [threadsLoading, setThreadsLoading] = useState(false);
+  const [serverVersion, setServerVersion] = useState(settings.apiBase ? "读取中…" : "未连接");
   const [notice, setNotice] = useState("尚未连接服务器，正在展示示例行径。");
   const selected = useMemo(() => entries.find((entry) => entry.id === selectedId) || entries[0], [entries, selectedId]);
+
+  useEffect(() => {
+    if (!settings.apiBase) { setServerVersion("未连接"); return undefined; }
+    const controller = new AbortController();
+    fetch(`${cleanBaseUrl(settings.apiBase)}/health`, { signal: controller.signal })
+      .then((response) => response.ok ? response.json() : Promise.reject(new Error("health request failed")))
+      .then((data) => setServerVersion(data.version || "未知"))
+      .catch((error) => { if (error.name !== "AbortError") setServerVersion("未知"); });
+    return () => controller.abort();
+  }, [settings.apiBase]);
 
   useEffect(() => {
     if (!settings.apiBase || !settings.token) return;
@@ -353,7 +370,8 @@ export function App() {
         openDetail={() => setDetailOpen(true)} notice={notice} machineName={settings.machineName} />
         <div className="mobile-detail-page"><DetailPane entry={selected} onBack={() => setDetailOpen(false)} /></div></>}
       {view === "threads" && <ThreadsPage threads={threads} loading={threadsLoading} />}
-      {view === "settings" && <SettingsPage settings={settings} saveSettings={saveSettings} />}
+      {view === "settings" && <SettingsPage settings={settings} saveSettings={saveSettings}
+        serverVersion={serverVersion} setServerVersion={setServerVersion} />}
     </main>
   </div>;
 }

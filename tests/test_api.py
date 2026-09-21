@@ -33,7 +33,9 @@ def test_status_is_fail_closed_and_health_is_public(tmp_path):
     )
     client = TestClient(create_app(settings, engine))
 
-    assert client.get("/health").status_code == 200
+    health = client.get("/health")
+    assert health.status_code == 200
+    assert health.json()["version"] == "0.1.0a1"
     assert client.get("/status").status_code == 401
     response = client.get(
         "/status", headers={"Authorization": "Bearer a-long-test-token"}
