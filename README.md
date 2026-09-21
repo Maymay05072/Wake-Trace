@@ -198,7 +198,9 @@ waketrace run
 调度器会优先领取已经到期的生活事件；没有事件时，才提供一个带本地时段信息的自由窗口。
 失败的醒来不会消费事件，领取租约到期后也会自动恢复，因此多个入口并存时不容易漏掉生活信号。
 
-如果希望像 Docker 一样，在一个进程中同时运行调度器、API、MCP 和已经构建好的 Web，请先构建前端：
+### 不使用 Docker，启动完整服务
+
+如果不使用 Docker，也可以在电脑上一次启动调度器、API、MCP 和 Web。先安装并构建网页版：
 
 ```bash
 cd web
@@ -208,7 +210,15 @@ cd ..
 waketrace start --host 127.0.0.1 --port 8765
 ```
 
-`waketrace run` 只运行调度器；`waketrace serve` 只运行 API 与 MCP；`waketrace start` 才是一体化入口。
+启动后，在浏览器打开 `http://127.0.0.1:8765`。
+
+一般情况下，直接使用 `waketrace start` 即可。它会同时运行完整服务：
+
+- `waketrace start`：同时运行调度器、API、MCP 和已经构建好的 Web，适合日常使用。
+- `waketrace run`：只运行调度器，主要用于不需要 Web、API 和 MCP 的场景。
+- `waketrace serve`：只运行 API 与 MCP，主要用于拆分部署或调试。
+
+这里的 `127.0.0.1` 表示仅允许当前电脑访问。需要从其他设备访问时，请先阅读后面的安全说明，不要直接把服务暴露到公网。
 
 ### 没有 PWA 也可以使用
 
