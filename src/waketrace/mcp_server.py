@@ -110,6 +110,21 @@ def build_mcp_server(settings: Settings, engine: WakeEngine) -> FastMCP:
             expires_at=now + timedelta(minutes=15),
         ):
             return {"ok": False, "reason": "busy"}
+        next_wake_at = store.get_state("next_wake_at", "")
+        if next_wake_at:
+            try:
+                due_at = datetime.fromisoformat(str(next_wake_at))
+                if due_at.tzinfo is None:
+                    due_at = due_at.replace(tzinfo=UTC)
+            except ValueError:
+                due_at = now
+            if now < due_at:
+                store.release_lease("wake_cycle", wake_id)
+                return {
+                    "ok": False,
+                    "reason": "not_due",
+                    "retry_at": due_at.isoformat(),
+                }
         gate = engine.policy.allow_wake(now)
         if not gate.allowed:
             retry_at = gate.retry_at or engine.policy.choose_next(now)

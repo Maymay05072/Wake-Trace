@@ -1,4 +1,4 @@
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from fastapi.testclient import TestClient
 
@@ -296,12 +296,19 @@ def test_mcp_external_wake_commits_a_trace(tmp_path):
             {"summary": "刚才聊到想在雨天重新读一本旧书。"},
         )
         assert submitted["ok"] is True
-        prepared = call(client, 2, "waketrace_prepare_wake", {})
+        future_wake = datetime.now(UTC) + timedelta(hours=1)
+        engine.store.set_state("next_wake_at", future_wake.isoformat())
+        not_due = call(client, 2, "waketrace_prepare_wake", {})
+        assert not_due["ok"] is False
+        assert not_due["reason"] == "not_due"
+        assert not_due["retry_at"] == future_wake.isoformat()
+        engine.store.delete_state("next_wake_at")
+        prepared = call(client, 3, "waketrace_prepare_wake", {})
         assert prepared["ok"] is True
         assert prepared["seed"]["kind"] == "chat_handoff"
         finished = call(
             client,
-            3,
+            4,
             "waketrace_finish_wake",
             {
                 "wake_id": prepared["wake_id"],
