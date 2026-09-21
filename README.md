@@ -134,8 +134,9 @@ waketrace timeline --limit 30
 waketrace timeline --json
 ```
 
-如果已经有聊天应用、Bot 或其他消息服务，也可以实现一个很小的 `Notifier` 适配器，把消息送到邮件、
-Telegram、Discord、ntfy、桌面通知或任何自己的界面。具体选择见
+如果已经有聊天应用、Bot 或其他消息服务，也可以实现一个很小的 `Notifier` 适配器，把 `message` 类型的
+主动消息送到邮件、Telegram、Discord、ntfy 或桌面通知。`Notifier` 只负责消息送达；行径与线头可以
+直接通过仓库自带的 Web 界面查看。更多接入方式见
 [没有 PWA 时怎样使用](docs/integration-guide.md#没有-pwa-时怎样使用)。
 
 在本机启动带鉴权的控制接口：
@@ -146,6 +147,54 @@ waketrace serve --host 127.0.0.1 --port 8765
 
 控制接口默认只监听 `127.0.0.1`。如果需要远程访问，请先配置 HTTPS、强随机令牌、
 请求大小限制、访问频率限制和适合自身环境的反向代理，不要直接暴露到公网。
+
+### Web 行径界面
+
+仓库中的 `web/` 是 WakeTrace 自带的响应式行径界面。电脑端使用行径流与详情双栏，手机端使用单列
+时间线与可展开的侧边导航。它只展示小机的行径、线头与工具记录，并提供小机名称和连接信息设置；
+它不是聊天客户端，也不会读取或管理聊天记录、外置记忆库。
+
+```bash
+cd web
+npm install
+npm run dev
+```
+
+同时启动带鉴权的 WakeTrace 控制接口：
+
+```bash
+waketrace serve --host 127.0.0.1 --port 8765
+```
+
+第一次打开后，在“设置”中填写小机名称、WakeTrace 地址和只读 Web 令牌。请在 `.env` 中为网页设置一枚
+与管理员令牌不同的随机令牌：
+
+```env
+WAKETRACE_WEB_TOKEN=另一段足够长的随机字符串
+```
+
+只读 Web 令牌只能读取行径、线头和作品索引，不能触发唤醒、投递事件或修改订阅。为了降低令牌泄露风险，
+网页默认只在当前浏览器会话中保存令牌；只有主动勾选“在此设备长期保存令牌”后才会长期保存。不要在
+共享设备上保存令牌。
+
+Web 与控制接口不在同一域名时，还需要在后端 `.env` 中明确允许 Web 来源，例如：
+
+```env
+WAKETRACE_WEB_ORIGINS=https://trace.example.com
+```
+
+多个来源使用英文逗号分隔。未配置时，控制接口不会开放跨域访问。远程部署必须使用 HTTPS，并且不要把
+控制接口直接暴露到公网；建议放在反向代理、私有网络或访问控制之后。
+
+构建用于部署的静态页面：
+
+```bash
+cd web
+npm run build
+```
+
+静态页面位于 `web/dist/client/`。实际部署时还应由 Web 服务器设置内容安全策略、禁止页面被嵌入、
+`nosniff` 和严格的 Referrer Policy；仓库附带的 Sites Worker 已默认设置这些响应头。
 
 向生活世界投递一个事件：
 

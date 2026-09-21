@@ -44,7 +44,14 @@
 |---|---|
 | `POST /world/events` | 投递一个现在或未来可用的事件 |
 | `GET /world/timeline` | 查看近期醒来结果 |
+| `GET /world/timeline/{trace_id}` | 查看一条醒来的缘由、经历与工具证据摘要 |
 | `GET /world/threads` | 查看开放线头 |
 | `GET /world/artifacts` | 查看作品索引 |
 
 时间线不会反向改变轻连续性规则：下一次醒来仍只读取近期 `fact` 与一句临时余念，不会自动回放作品或完整正文。
+
+如果 Web 与控制接口不在同一域名，可通过逗号分隔的 `WAKETRACE_WEB_ORIGINS` 明确允许 Web 来源；
+未配置时不会开放跨域访问。
+
+Web 应使用独立的 `WAKETRACE_WEB_TOKEN`。这枚只读令牌可以访问时间线、详情、线头和作品索引，但不能
+触发唤醒、投递事件或修改订阅；管理员令牌仍可访问全部接口。

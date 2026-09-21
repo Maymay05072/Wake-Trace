@@ -608,3 +608,32 @@ class SQLiteStore:
                 (max(1, min(limit, 100)),),
             ).fetchall()
         return [dict(row) for row in rows]
+
+    def timeline_detail(self, trace_id: int) -> dict[str, Any] | None:
+        with self.connect() as conn:
+            row = conn.execute(
+                """SELECT t.id, t.cycle_id, t.outcome, t.fact, t.content, t.share,
+                   t.notified, t.fact_source, t.evidence_json, t.created_at,
+                   c.trigger_kind, c.seed_summary, c.status AS cycle_status,
+                   c.started_at, c.finished_at
+                   FROM traces t JOIN wake_cycles c ON c.id=t.cycle_id
+                   WHERE t.id=?""",
+                (trace_id,),
+            ).fetchone()
+            if row is None:
+                return None
+
+            tool_rows = conn.execute(
+                """SELECT tool_name, ok, summary, created_at
+                   FROM tool_events WHERE cycle_id=? ORDER BY id ASC""",
+                (row["cycle_id"],),
+            ).fetchall()
+
+        detail = dict(row)
+        try:
+            evidence = json.loads(detail.pop("evidence_json"))
+        except (TypeError, json.JSONDecodeError):
+            evidence = []
+        detail["evidence"] = evidence if isinstance(evidence, list) else []
+        detail["tool_events"] = [dict(tool_row) for tool_row in tool_rows]
+        return detail

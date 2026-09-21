@@ -133,6 +133,8 @@ nav button.active::before { background: var(--accent); }
 .field-row label { padding-top: 12px; font-weight: 600; }
 .field-row input { width: 100%; min-height: 48px; padding: 10px 14px; border: 1px solid var(--selected-line); border-radius: 3px; background: color-mix(in srgb, var(--paper) 88%, white); color: var(--ink); }
 .field-row p { margin: 8px 0 0; color: var(--muted); font-size: 0.78rem; }
+.remember-token { width: fit-content; display: inline-flex; align-items: center; gap: 9px; margin-top: 12px; color: var(--muted); font-size: 0.78rem; cursor: pointer; }
+.field-row .remember-token input { width: 17px; min-height: 17px; margin: 0; accent-color: var(--sidebar); }
 .password-field { position: relative; }
 .password-field input { padding-right: 50px; }
 .password-field button { position: absolute; inset: 2px 2px 2px auto; width: 44px; border: 0; background: transparent; color: var(--muted); cursor: pointer; }

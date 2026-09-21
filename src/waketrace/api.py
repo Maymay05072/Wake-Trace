@@ -5,6 +5,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Query
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, field_validator
 
 from .config import Settings
@@ -55,20 +56,38 @@ def create_app(settings: Settings | None = None, engine: WakeEngine | None = Non
         )
 
     app = FastAPI(title="WakeTrace", version="0.1.0-alpha")
+    web_origins = [origin.strip() for origin in settings.web_origins.split(",") if origin.strip()]
+    if web_origins:
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=web_origins,
+            allow_methods=["GET", "POST", "OPTIONS"],
+            allow_headers=["Authorization", "Content-Type"],
+        )
 
-    def authorize(authorization: str | None = Header(default=None)) -> None:
+    def token_matches(authorization: str | None, token: str) -> bool:
+        return bool(token) and hmac.compare_digest(authorization or "", f"Bearer {token}")
+
+    def authorize_admin(authorization: str | None = Header(default=None)) -> None:
         if not settings.admin_token:
             raise HTTPException(503, "WAKETRACE_ADMIN_TOKEN is not configured")
-        supplied = authorization or ""
-        expected = f"Bearer {settings.admin_token}"
-        if not hmac.compare_digest(supplied, expected):
+        if not token_matches(authorization, settings.admin_token):
             raise HTTPException(401, "invalid bearer token")
+
+    def authorize_read(authorization: str | None = Header(default=None)) -> None:
+        if token_matches(authorization, settings.web_token):
+            return
+        if token_matches(authorization, settings.admin_token):
+            return
+        if not settings.web_token and not settings.admin_token:
+            raise HTTPException(503, "no WakeTrace access token is configured")
+        raise HTTPException(401, "invalid bearer token")
 
     @app.get("/health")
     def health() -> dict[str, str]:
         return {"status": "ok"}
 
-    @app.get("/status", dependencies=[Depends(authorize)])
+    @app.get("/status", dependencies=[Depends(authorize_admin)])
     def status() -> dict[str, Any]:
         return {
             "next_wake_at": engine.store.get_state("next_wake_at", None),
@@ -76,7 +95,7 @@ def create_app(settings: Settings | None = None, engine: WakeEngine | None = Non
             "wake_counters": engine.store.get_state("wake_counters", {}),
         }
 
-    @app.post("/wake", dependencies=[Depends(authorize)])
+    @app.post("/wake", dependencies=[Depends(authorize_admin)])
     def wake(payload: WakeRequest) -> dict[str, Any]:
         result = engine.run(
             WakeSeed(payload.kind, payload.summary, datetime.now(UTC), payload.evidence),
@@ -89,12 +108,12 @@ def create_app(settings: Settings | None = None, engine: WakeEngine | None = Non
             "next_wake_at": result.next_wake_at.isoformat(),
         }
 
-    @app.post("/subscriptions", dependencies=[Depends(authorize)])
+    @app.post("/subscriptions", dependencies=[Depends(authorize_admin)])
     def subscribe(payload: SubscriptionRequest) -> dict[str, bool]:
         engine.store.add_subscription(payload.subscription)
         return {"ok": True}
 
-    @app.post("/world/events", dependencies=[Depends(authorize)])
+    @app.post("/world/events", dependencies=[Depends(authorize_admin)])
     def world_event(payload: WorldEventRequest) -> dict[str, int]:
         event_id = engine.store.enqueue_world_event(
             payload.kind,
@@ -104,15 +123,22 @@ def create_app(settings: Settings | None = None, engine: WakeEngine | None = Non
         )
         return {"event_id": event_id}
 
-    @app.get("/world/timeline", dependencies=[Depends(authorize)])
+    @app.get("/world/timeline", dependencies=[Depends(authorize_read)])
     def timeline(limit: int = Query(default=30, ge=1, le=100)) -> dict[str, Any]:
         return {"timeline": engine.store.recent_timeline(limit)}
 
-    @app.get("/world/threads", dependencies=[Depends(authorize)])
+    @app.get("/world/timeline/{trace_id}", dependencies=[Depends(authorize_read)])
+    def timeline_detail(trace_id: int) -> dict[str, Any]:
+        detail = engine.store.timeline_detail(trace_id)
+        if detail is None:
+            raise HTTPException(404, "timeline entry not found")
+        return {"entry": detail}
+
+    @app.get("/world/threads", dependencies=[Depends(authorize_read)])
     def threads() -> dict[str, Any]:
         return {"threads": engine.store.list_life_threads()}
 
-    @app.get("/world/artifacts", dependencies=[Depends(authorize)])
+    @app.get("/world/artifacts", dependencies=[Depends(authorize_read)])
     def artifacts(limit: int = Query(default=20, ge=1, le=100)) -> dict[str, Any]:
         return {"artifacts": engine.store.list_life_artifacts(limit)}
 

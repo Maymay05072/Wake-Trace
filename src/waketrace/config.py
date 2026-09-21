@@ -18,7 +18,9 @@ class Settings(BaseSettings):
     api_base_url: str = "https://api.example.com/v1/chat/completions"
     model: str = "your-model-name"
     admin_token: str = ""
+    web_token: str = ""
     db_path: Path = Path("./data/waketrace.db")
+    web_origins: str = ""
 
     companion_name: str = "Companion"
     user_name: str = "User"
@@ -56,4 +58,3 @@ class Settings(BaseSettings):
 
     def ensure_runtime_dirs(self) -> None:
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
-

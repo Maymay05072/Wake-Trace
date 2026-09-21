@@ -5,7 +5,8 @@ import {
 } from "@phosphor-icons/react";
 
 const STORAGE_KEY = "waketrace-web-settings";
-const defaultSettings = { machineName: "阿晏", apiBase: "", token: "" };
+const TOKEN_STORAGE_KEY = "waketrace-web-token";
+const defaultSettings = { machineName: "阿晏", apiBase: "", token: "", rememberToken: false };
 
 const demoEntries = [
   {
@@ -53,10 +54,19 @@ const triggerLabels = {
 function readSettings() {
   try {
     const stored = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
+    const rememberToken = Boolean(stored.rememberToken);
+    const legacyToken = typeof stored.token === "string" ? stored.token : "";
+    if (legacyToken) {
+      sessionStorage.setItem(TOKEN_STORAGE_KEY, legacyToken);
+      delete stored.token;
+      stored.rememberToken = false;
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(stored));
+    }
     return {
       machineName: stored.machineName ?? defaultSettings.machineName,
       apiBase: stored.apiBase ?? defaultSettings.apiBase,
-      token: stored.token ?? defaultSettings.token,
+      token: legacyToken || (rememberToken ? localStorage : sessionStorage).getItem(TOKEN_STORAGE_KEY) || "",
+      rememberToken: legacyToken ? false : rememberToken,
     };
   }
   catch { return defaultSettings; }
@@ -247,10 +257,13 @@ function SettingsPage({ settings, saveSettings }) {
     </section>
     <section className="form-section"><div className="section-title"><h2>连接</h2></div>
       <div className="field-row"><label htmlFor="api-base">WakeTrace 地址</label><div><input id="api-base" type="url" placeholder="https://example.com" value={draft.apiBase} onChange={(event) => update("apiBase", event.target.value)} /></div></div>
-      <div className="field-row"><label htmlFor="access-token">访问令牌</label><div><div className="password-field">
+      <div className="field-row"><label htmlFor="access-token">只读 Web 令牌</label><div><div className="password-field">
         <input id="access-token" type={showToken ? "text" : "password"} value={draft.token} onChange={(event) => update("token", event.target.value)} autoComplete="off" />
         <button type="button" onClick={() => setShowToken((value) => !value)} aria-label={showToken ? "隐藏令牌" : "显示令牌"}>{showToken ? <EyeSlash size={22} /> : <Eye size={22} />}</button>
-      </div><p>令牌只保存在当前浏览器中，请勿在共享设备上保存。</p></div></div>
+      </div><p>请使用只读 Web 令牌。默认在关闭浏览器后清除。</p>
+        <label className="remember-token"><input type="checkbox" checked={draft.rememberToken}
+          onChange={(event) => update("rememberToken", event.target.checked)} />在此设备长期保存令牌</label>
+      </div></div>
       <div className="connection-row"><span className={`connection-status status-${connection}`}><i aria-hidden="true" />{statusText}</span>
         <button type="button" className="secondary-button" onClick={testConnection}>测试连接</button></div>
     </section>
@@ -319,7 +332,16 @@ export function App() {
   };
   const saveSettings = (next) => {
     const normalized = { ...defaultSettings, ...next, machineName: next.machineName.trim() || "未命名" };
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(normalized)); setSettings(normalized);
+    const { token, ...persisted } = normalized;
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(persisted));
+    if (normalized.rememberToken) {
+      localStorage.setItem(TOKEN_STORAGE_KEY, token);
+      sessionStorage.removeItem(TOKEN_STORAGE_KEY);
+    } else {
+      sessionStorage.setItem(TOKEN_STORAGE_KEY, token);
+      localStorage.removeItem(TOKEN_STORAGE_KEY);
+    }
+    setSettings(normalized);
   };
   const navProps = { view, setView: (next) => { setView(next); setDetailOpen(false); }, settings };
 
