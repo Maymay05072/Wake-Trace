@@ -1,0 +1,10 @@
+services:
+  waketrace:
+    build: .
+    restart: unless-stopped
+    env_file:
+      - .env
+    ports:
+      - "127.0.0.1:8765:8765"
+    volumes:
+      - ./data:/data

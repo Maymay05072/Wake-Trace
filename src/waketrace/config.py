@@ -19,7 +19,13 @@ class Settings(BaseSettings):
     model: str = "your-model-name"
     admin_token: str = ""
     web_token: str = ""
+    mcp_token: str = ""
+    mcp_allow_write: bool = False
+    mcp_allow_wake: bool = False
+    mcp_allowed_hosts: str = "127.0.0.1,127.0.0.1:*,localhost,localhost:*"
+    scheduler_enabled: bool = True
     db_path: Path = Path("./data/waketrace.db")
+    web_dist_path: Path = Path("./web/dist/client")
     web_origins: str = ""
 
     companion_name: str = "Companion"

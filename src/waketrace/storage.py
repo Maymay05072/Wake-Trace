@@ -284,6 +284,10 @@ class SQLiteStore:
                 (key, raw, _iso(now)),
             )
 
+    def delete_state(self, key: str) -> None:
+        with self.connect() as conn:
+            conn.execute("DELETE FROM runtime_state WHERE key=?", (key,))
+
     def fresh_residue(self, ttl_hours: int, now: datetime) -> str:
         value = self.get_state("residue", {})
         if not isinstance(value, dict) or not str(value.get("text", "")).strip():

@@ -13,4 +13,4 @@ __all__ = [
     "WakeSeed",
     "build_lifeworld_tools",
 ]
-__version__ = "0.1.0a1"
+__version__ = "2.0.0"

@@ -1,20 +1,26 @@
 from __future__ import annotations
 
 import hmac
+from contextlib import asynccontextmanager
 from datetime import UTC, datetime
+from threading import Event, Thread
 from typing import Any
 
-from fastapi import Depends, FastAPI, Header, HTTPException, Query
+from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, field_validator
 
 from . import __version__
 from .config import Settings
 from .engine import WakeEngine
 from .lifeworld import build_lifeworld_tools
+from .mcp_server import build_mcp_server
 from .models import WakeSeed
 from .notifiers import WebPushNotifier
 from .providers import OpenAICompatibleProvider
+from .scheduler import WakeScheduler
 from .storage import SQLiteStore
 
 
@@ -43,7 +49,14 @@ class WorldEventRequest(BaseModel):
         return value
 
 
-def create_app(settings: Settings | None = None, engine: WakeEngine | None = None) -> FastAPI:
+def create_app(
+    settings: Settings | None = None,
+    engine: WakeEngine | None = None,
+    *,
+    run_scheduler: bool = False,
+    mount_web: bool = False,
+    poll_seconds: float = 5.0,
+) -> FastAPI:
     settings = settings or Settings()
     settings.ensure_runtime_dirs()
     if engine is None:
@@ -56,7 +69,30 @@ def create_app(settings: Settings | None = None, engine: WakeEngine | None = Non
             WebPushNotifier(settings, store),
         )
 
-    app = FastAPI(title="WakeTrace", version="0.1.0-alpha")
+    mcp_server = build_mcp_server(settings, engine)
+    mcp_app = mcp_server.streamable_http_app()
+    stop_scheduler = Event()
+    scheduler_thread: Thread | None = None
+
+    @asynccontextmanager
+    async def lifespan(_app: FastAPI):
+        nonlocal scheduler_thread
+        async with mcp_server.session_manager.run():
+            if run_scheduler and settings.scheduler_enabled:
+                scheduler = WakeScheduler(engine, poll_seconds)
+                scheduler_thread = Thread(
+                    target=scheduler.run_forever,
+                    args=(stop_scheduler,),
+                    name="waketrace-scheduler",
+                    daemon=True,
+                )
+                scheduler_thread.start()
+            yield
+            stop_scheduler.set()
+            if scheduler_thread is not None:
+                scheduler_thread.join(timeout=max(2.0, poll_seconds + 1.0))
+
+    app = FastAPI(title="WakeTrace", version=__version__, lifespan=lifespan)
     web_origins = [origin.strip() for origin in settings.web_origins.split(",") if origin.strip()]
     if web_origins:
         app.add_middleware(
@@ -65,6 +101,19 @@ def create_app(settings: Settings | None = None, engine: WakeEngine | None = Non
             allow_methods=["GET", "POST", "OPTIONS"],
             allow_headers=["Authorization", "Content-Type"],
         )
+
+    @app.middleware("http")
+    async def authorize_mcp(request: Request, call_next):
+        if request.url.path == "/mcp":
+            if not settings.mcp_token:
+                return JSONResponse(
+                    {"detail": "WAKETRACE_MCP_TOKEN is not configured"},
+                    status_code=503,
+                )
+            authorization = request.headers.get("authorization", "")
+            if not hmac.compare_digest(authorization, f"Bearer {settings.mcp_token}"):
+                return JSONResponse({"detail": "invalid bearer token"}, status_code=401)
+        return await call_next(request)
 
     def token_matches(authorization: str | None, token: str) -> bool:
         return bool(token) and hmac.compare_digest(authorization or "", f"Bearer {token}")
@@ -142,5 +191,11 @@ def create_app(settings: Settings | None = None, engine: WakeEngine | None = Non
     @app.get("/world/artifacts", dependencies=[Depends(authorize_read)])
     def artifacts(limit: int = Query(default=20, ge=1, le=100)) -> dict[str, Any]:
         return {"artifacts": engine.store.list_life_artifacts(limit)}
+
+    # FastMCP's own lifespan is entered above; only its protocol route is shared.
+    app.router.routes.extend(mcp_app.routes)
+
+    if mount_web and settings.web_dist_path.is_dir():
+        app.mount("/", StaticFiles(directory=settings.web_dist_path, html=True), name="web")
 
     return app

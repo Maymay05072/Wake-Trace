@@ -16,7 +16,8 @@ WakeTrace 源于一个很简单的愿望：AI 伴侣不应该只在你发来消�
 
 > A lightweight-continuity wake runtime for relational AI companions.
 
-当前版本为 `0.1.0-alpha`，接口仍可能在后续 Alpha 版本中调整。
+当前版本为 `2.0.0`。2.0 轻量版把运行时、调度器、REST API、MCP 与 Web 行径界面装进同一个
+Docker 容器，同时继续使用一份 SQLite 数据，不另建一套“记忆库”。
 
 ## 为什么做 WakeTrace
 
@@ -78,9 +79,35 @@ WakeTrace 源于一个很简单的愿望：AI 伴侣不应该只在你发来消�
 - 可选 Web Push
 - 无需前端的终端通知与本地时间线
 - 默认仅监听本机、带鉴权的 FastAPI 控制接口
+- Streamable HTTP MCP：读取默认开放，写入与外部醒来分别显式授权
+- 单容器 Docker 部署：运行时、调度器、REST API、MCP 和 Web 共用一个服务
 - 使用假模型与假通知器完成确定性测试
 
 ## 快速开始
+
+### Docker（推荐）
+
+Docker 方式只有一个容器。Web、API 和 MCP 共用 `8765` 端口，SQLite 位于宿主机的 `./data/`：
+
+```bash
+cp .env.example .env
+# 编辑 .env，至少填写模型配置与三枚彼此不同的随机令牌
+docker compose up -d --build
+```
+
+打开 <http://127.0.0.1:8765>。Compose 默认只绑定本机；需要跨设备访问时，请在前面放置 HTTPS
+反向代理或私有网络，并同步配置允许的 MCP Host，不要直接把 `8765` 暴露到公网。
+
+查看状态与日志：
+
+```bash
+docker compose ps
+docker compose logs -f waketrace
+```
+
+升级时重新拉取代码并执行 `docker compose up -d --build`。`./data/` 不会随容器重建而丢失。
+
+### Python
 
 需要 Python 3.11 或更高版本。
 
@@ -211,6 +238,35 @@ curl -X POST http://127.0.0.1:8765/world/events \
 `evidence` 会进入模型上下文并保存在本地数据库中，只放本次判断必要的信息，不要直接塞入完整聊天、
 密钥或原始私人文档。
 
+## MCP 与聊天客户端
+
+MCP 地址是 `http://127.0.0.1:8765/mcp`，使用 `WAKETRACE_MCP_TOKEN` 作为 Bearer Token。它不是模型
+API 代理，也不会接管第三方聊天客户端的每一轮请求。
+
+- Kelivo、RikkaHub、Operit 等 API 客户端继续直接连接原来的模型 API；需要时通过 MCP 读取近期行径，
+  或由用户明确调用“交回生活”。它们不需要再设置一套定时唤醒。
+- ChatGPT 与 Claude 的官方客户端可以把 WakeTrace 配成远程 MCP；若客户端自身提供定时任务，可把它
+  作为一次“醒来的机会”。这条路径取决于客户端对远程 MCP 和定时任务的实际支持，2.0 中标记为实验性。
+- WakeTrace 不会假装每轮聊天结束都能自动调用工具。2.0 的聊天交接是显式动作；自动回写需要聊天宿主
+  提供生命周期钩子，留到后续桥接模式处理。
+
+MCP 默认只有读取能力。需要显式聊天交接或事件投递时，设置：
+
+```env
+WAKETRACE_MCP_ALLOW_WRITE=true
+```
+
+只有在 ChatGPT 或 Claude 之类的外部客户端负责完成一次醒来时，才设置：
+
+```env
+WAKETRACE_SCHEDULER_ENABLED=false
+WAKETRACE_MCP_ALLOW_WAKE=true
+```
+
+定时任务每次必须先调用 `waketrace_prepare_wake`，然后恰好调用一次 `waketrace_finish_wake` 或
+`waketrace_abort_wake`。定时任务只提供机会，是否到点、是否静默、何时再次醒来仍由 WakeTrace 判断。
+完整工具表、权限边界和客户端提示词见 [MCP 接入指南](docs/mcp.md)。
+
 ## 生活世界层
 
 WakeTrace 不把“有生命力”理解为更频繁地说话，而是让醒来确实来自正在发生的生活：
@@ -252,6 +308,7 @@ registry.register(
 - [架构与信任边界](docs/architecture.md)
 - [生活世界层](docs/lifeworld.md)
 - [从唤醒核心到一整个生活世界](docs/integration-guide.md)
+- [MCP 接入指南](docs/mcp.md)
 - [最终结果协议](docs/protocol.md)
 
 ## 项目来源

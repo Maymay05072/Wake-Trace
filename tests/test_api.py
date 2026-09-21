@@ -35,7 +35,7 @@ def test_status_is_fail_closed_and_health_is_public(tmp_path):
 
     health = client.get("/health")
     assert health.status_code == 200
-    assert health.json()["version"] == "0.1.0a1"
+    assert health.json()["version"] == "2.0.0"
     assert client.get("/status").status_code == 401
     response = client.get(
         "/status", headers={"Authorization": "Bearer a-long-test-token"}
@@ -202,3 +202,113 @@ def test_web_token_is_read_only(tmp_path):
 
     admin_headers = {"Authorization": "Bearer a-long-test-token"}
     assert client.get("/world/timeline", headers=admin_headers).status_code == 200
+
+
+def test_mcp_is_authenticated_and_write_capabilities_are_opt_in(tmp_path):
+    settings = Settings(
+        db_path=tmp_path / "wake.db",
+        mcp_token="a-separate-mcp-token",
+    )
+    engine = WakeEngine(
+        settings,
+        SQLiteStore(settings.db_path),
+        UnusedProvider(),
+        ToolRegistry(),
+        UnusedNotifier(),
+    )
+    headers = {
+        "Authorization": "Bearer a-separate-mcp-token",
+        "Accept": "application/json, text/event-stream",
+        "Content-Type": "application/json",
+    }
+    with TestClient(create_app(settings, engine), base_url="http://localhost") as client:
+        assert client.post("/mcp", json={}).status_code == 401
+        listed = client.post(
+            "/mcp",
+            headers=headers,
+            json={"jsonrpc": "2.0", "id": 1, "method": "tools/list", "params": {}},
+        )
+        assert listed.status_code == 200
+        names = {tool["name"] for tool in listed.json()["result"]["tools"]}
+        assert "waketrace_recent_experiences" in names
+        assert "waketrace_handoff_chat" in names
+        assert "waketrace_prepare_wake" in names
+
+        denied = client.post(
+            "/mcp",
+            headers=headers,
+            json={
+                "jsonrpc": "2.0",
+                "id": 2,
+                "method": "tools/call",
+                "params": {
+                    "name": "waketrace_handoff_chat",
+                    "arguments": {"summary": "一段不应被写入的聊天摘要。"},
+                },
+            },
+        )
+        assert denied.status_code == 200
+        assert denied.json()["result"]["structuredContent"]["ok"] is False
+        assert engine.store.claim_world_event(
+            now=datetime.now(UTC), claim_token="test"
+        ) is None
+
+
+def test_mcp_external_wake_commits_a_trace(tmp_path):
+    settings = Settings(
+        db_path=tmp_path / "wake.db",
+        mcp_token="a-separate-mcp-token",
+        mcp_allow_write=True,
+        mcp_allow_wake=True,
+    )
+    engine = WakeEngine(
+        settings,
+        SQLiteStore(settings.db_path),
+        UnusedProvider(),
+        ToolRegistry(),
+        UnusedNotifier(),
+    )
+    headers = {
+        "Authorization": "Bearer a-separate-mcp-token",
+        "Accept": "application/json, text/event-stream",
+        "Content-Type": "application/json",
+    }
+
+    def call(client, request_id, name, arguments):
+        response = client.post(
+            "/mcp",
+            headers=headers,
+            json={
+                "jsonrpc": "2.0",
+                "id": request_id,
+                "method": "tools/call",
+                "params": {"name": name, "arguments": arguments},
+            },
+        )
+        assert response.status_code == 200
+        return response.json()["result"]["structuredContent"]
+
+    with TestClient(create_app(settings, engine), base_url="http://localhost") as client:
+        submitted = call(
+            client,
+            1,
+            "waketrace_handoff_chat",
+            {"summary": "刚才聊到想在雨天重新读一本旧书。"},
+        )
+        assert submitted["ok"] is True
+        prepared = call(client, 2, "waketrace_prepare_wake", {})
+        assert prepared["ok"] is True
+        assert prepared["seed"]["kind"] == "chat_handoff"
+        finished = call(
+            client,
+            3,
+            "waketrace_finish_wake",
+            {
+                "wake_id": prepared["wake_id"],
+                "outcome": "trace",
+                "fact": "接住了一个关于雨天阅读的聊天线索。",
+                "content": "把那本旧书的名字记了下来。",
+            },
+        )
+        assert finished["ok"] is True
+        assert engine.store.recent_timeline(1)[0]["fact"] == "接住了一个关于雨天阅读的聊天线索。"

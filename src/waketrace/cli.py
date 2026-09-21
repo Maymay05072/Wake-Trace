@@ -38,6 +38,10 @@ def main() -> None:
     serve = sub.add_parser("serve", help="serve the authenticated HTTP API")
     serve.add_argument("--host", default="127.0.0.1")
     serve.add_argument("--port", type=int, default=8765)
+    start = sub.add_parser("start", help="run API, MCP, Web, and scheduler in one process")
+    start.add_argument("--host", default="0.0.0.0")
+    start.add_argument("--port", type=int, default=8765)
+    start.add_argument("--poll-seconds", type=float, default=5.0)
     run = sub.add_parser("run", help="run the autonomous scheduler")
     run.add_argument("--poll-seconds", type=float, default=5.0)
     run.add_argument(
@@ -62,6 +66,17 @@ def main() -> None:
         print(f"initialized {settings.db_path}")
     elif args.command == "serve":
         uvicorn.run(create_app(settings), host=args.host, port=args.port)
+    elif args.command == "start":
+        uvicorn.run(
+            create_app(
+                settings,
+                run_scheduler=True,
+                mount_web=True,
+                poll_seconds=args.poll_seconds,
+            ),
+            host=args.host,
+            port=args.port,
+        )
     elif args.command == "run":
         WakeScheduler(
             build_engine(settings, console=args.console),

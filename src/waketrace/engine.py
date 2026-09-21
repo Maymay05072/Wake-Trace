@@ -191,6 +191,25 @@ class WakeEngine:
             tuple(evidence),
         )
 
+    def commit_external(
+        self,
+        cycle_id: int,
+        draft: WakeDraft,
+        *,
+        now: datetime | None = None,
+    ) -> WakeResult:
+        """Commit a draft produced by an authorized external MCP wake client."""
+        timestamp = (now or datetime.now(UTC)).astimezone(UTC)
+        result = self._commit(cycle_id, draft, [], timestamp)
+        self.store.finish_cycle(
+            cycle_id,
+            status="completed",
+            outcome=result.outcome,
+            now=timestamp,
+        )
+        self.policy.mark_wake(timestamp)
+        return result
+
 
 def parse_final_draft(content: str) -> WakeDraft:
     try:

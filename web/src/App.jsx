@@ -6,7 +6,12 @@ import {
 
 const STORAGE_KEY = "waketrace-web-settings";
 const TOKEN_STORAGE_KEY = "waketrace-web-token";
-const defaultSettings = { machineName: "阿晏", apiBase: "", token: "", rememberToken: false };
+const defaultSettings = {
+  machineName: "阿晏",
+  apiBase: typeof window === "undefined" ? "" : window.location.origin,
+  token: "",
+  rememberToken: false,
+};
 
 const demoEntries = [
   {
@@ -109,7 +114,7 @@ const navItems = [
   { id: "settings", label: "设置", icon: GearSix },
 ];
 
-function NavContent({ view, setView, settings, onNavigate }) {
+function NavContent({ view, setView, settings, serverVersion, onNavigate }) {
   return <>
     <div>
       <AppBrand />
@@ -124,7 +129,7 @@ function NavContent({ view, setView, settings, onNavigate }) {
         })}
       </nav>
     </div>
-    <footer className="sidebar-footer"><span aria-hidden="true" /><p>让 AI 的生活<br />被看见</p><small>开源项目 · v0.1.0</small></footer>
+    <footer className="sidebar-footer"><span aria-hidden="true" /><p>让 AI 的生活<br />被看见</p><small>开源项目 · {/^\d/.test(serverVersion) ? `v${serverVersion}` : "版本随连接读取"}</small></footer>
   </>;
 }
 
@@ -360,7 +365,7 @@ export function App() {
     }
     setSettings(normalized);
   };
-  const navProps = { view, setView: (next) => { setView(next); setDetailOpen(false); }, settings };
+  const navProps = { view, setView: (next) => { setView(next); setDetailOpen(false); }, settings, serverVersion };
 
   return <div className="app-shell"><Sidebar {...navProps} />
     <MobileHeader settings={settings} open={drawerOpen} openMenu={() => setDrawerOpen(true)} />
