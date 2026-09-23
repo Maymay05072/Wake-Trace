@@ -372,7 +372,53 @@ def register_hands_tools(registry: ToolRegistry, settings: Settings) -> ToolRegi
             handler=run_command,
         )
     )
+    # 6) 读小红书
+    def xhs_read(arguments: dict[str, Any]) -> dict[str, Any]:
+        from . import xhs
 
+        url = str(arguments.get("url", ""))
+        limit = int(arguments.get("max_chars") or default_limit)
+        comments = int(arguments.get("comments") or 8)
+        note = xhs.read(url, comment_limit=max(0, min(comments, 30)))
+        text = xhs.render(note, limit)
+        return {
+            "url": url,
+            "status": note.get("status"),
+            "final_url": note.get("final_url"),
+            "title": note.get("title"),
+            "author": note.get("author"),
+            "liked": note.get("likedCount"),
+            "missing": note.get("missing"),
+            "length": len(text),
+            "text": text,
+            "summary": f"小红书笔记：{note.get('title') or '（没读到标题）'}"
+            f"（{len(text)} 字符）",
+        }
+
+    registry.register(
+        RegisteredTool(
+            name="xhs_read",
+            description=(
+                "读一条小红书笔记：短链或长链都行，会跟着跳转拿到标题、正文、标签、作者、"
+                "点赞收藏评论数和热评。分不清真假的时候以返回的 title/desc 为准；"
+                "如果 missing 里带 desc，就是真没读到，如实说没读到，别编。"
+            ),
+            parameters={
+                "type": "object",
+                "required": ["url"],
+                "properties": {
+                    "url": {
+                        "type": "string",
+                        "description": "小红书分享链（xhslink.cn/…）或笔记链",
+                    },
+                    "comments": {"type": "integer", "minimum": 0, "maximum": 30},
+                    "max_chars": {"type": "integer", "minimum": 200, "maximum": 20000},
+                },
+                "additionalProperties": False,
+            },
+            handler=xhs_read,
+        )
+    )
     return registry
 
 

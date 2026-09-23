@@ -546,3 +546,15 @@ Paths outside the allowed roots are refused. Logged-in or JS-only sites (Xiaohon
 for example) return almost nothing, and the tool says so instead of inventing content.
 
 Self-check: `.venv/bin/python tools/hands_selftest.py`
+
+## 醒来时的工具（14 只）
+
+线头/作品：`thread_list` `thread_open` `thread_continue` `thread_close` `artifact_list` `artifact_create`
+
+手：`web_read` `api_call` `file_read` `file_write` `run_command`
+
+小红书：`xhs_read`（短链也认，读标题/正文/标签/作者/互动数/热评）、`xhs_task`、`xhs_results`
+
+其中 `xhs_read` 走页面内嵌的 `window.__INITIAL_STATE__`，不需要登录。
+Operit 那边的 `xhsreader_pro` 插件对分享链会回「未找到笔记内容」，所以借手桥的读取端也换成了这个模块（`tools/xhs_worker.py`），不再依赖插件。
+任务收件箱：`/sdcard/Download/Operit/wake_tasks`（`inbox.jsonl` 挂任务、`claims.jsonl` 记认领、`last_result.txt` 放回执），同一条只跑一次。
