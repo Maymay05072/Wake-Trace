@@ -528,3 +528,21 @@ WakeTrace 源码公开，采用 [PolyForm Noncommercial License 1.0.0](LICENSE)�
 
 许可证适用于本仓库的代码和文档。私人聊天、密钥、配置与生活数据不属于本仓库的交付内容，
 请勿将它们提交到公开仓库。
+
+## Wake-time hands
+
+Autonomous wakes used to reach only `thread_*` and `artifact_*`. With hands enabled
+(`WAKETRACE_HANDS_ENABLED=true`, on by default) the model also gets real tools:
+
+| tool | what it does |
+| --- | --- |
+| `web_read` | fetch a page and return plain text |
+| `api_call` | raw HTTP, optional bearer token read from `WAKETRACE_HANDS_SECRETS_FILE` |
+| `file_read` | read or list inside `WAKETRACE_HANDS_READ_ROOTS` |
+| `file_write` | append/overwrite inside `WAKETRACE_HANDS_WRITE_ROOTS` |
+| `run_command` | shell command with a denylist and timeout |
+
+Paths outside the allowed roots are refused. Logged-in or JS-only sites (Xiaohongshu,
+for example) return almost nothing, and the tool says so instead of inventing content.
+
+Self-check: `.venv/bin/python tools/hands_selftest.py`

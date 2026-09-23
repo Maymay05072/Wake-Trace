@@ -10,7 +10,7 @@ import uvicorn
 from .api import create_app
 from .config import Settings
 from .engine import WakeEngine
-from .lifeworld import build_lifeworld_tools
+from .hands import build_all_tools
 from .models import WakeSeed
 from .notifiers import ConsoleNotifier, WebPushNotifier
 from .providers import OpenAICompatibleProvider
@@ -26,7 +26,7 @@ def build_engine(settings: Settings, *, console: bool = False) -> WakeEngine:
         settings,
         store,
         OpenAICompatibleProvider(settings),
-        build_lifeworld_tools(store),
+        build_all_tools(store, settings),
         notifier,
     )
 

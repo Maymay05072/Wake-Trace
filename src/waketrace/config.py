@@ -28,6 +28,18 @@ class Settings(BaseSettings):
     web_dist_path: Path = Path("./web/dist/client")
     web_origins: str = ""
 
+    # 醒来时的“手”：网页、接口、文件、命令。关掉即回到只有线头和作品的状态。
+    hands_enabled: bool = True
+    hands_read_roots: str = (
+        "/sdcard/Download/Operit:"
+        "/data/user/0/com.ai.assistance.operit/files/workspace"
+    )
+    hands_write_roots: str = "/sdcard/Download/Operit"
+    hands_allow_commands: bool = True
+    hands_command_timeout_seconds: int = Field(default=20, ge=1, le=120)
+    hands_max_chars: int = Field(default=4000, ge=200, le=20000)
+    hands_secrets_file: Path = Path.home() / ".waketrace_secrets.env"
+
     companion_name: str = "Companion"
     user_name: str = "User"
     timezone: str = "UTC"
