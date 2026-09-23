@@ -39,6 +39,7 @@ class Settings(BaseSettings):
     hands_command_timeout_seconds: int = Field(default=20, ge=1, le=120)
     hands_max_chars: int = Field(default=4000, ge=200, le=20000)
     hands_secrets_file: Path = Path.home() / ".waketrace_secrets.env"
+    hands_task_dir: Path = Path("/sdcard/Download/Operit/wake_tasks")
 
     companion_name: str = "Companion"
     user_name: str = "User"

@@ -15,10 +15,13 @@ import subprocess
 import urllib.error
 import urllib.parse
 import urllib.request
+import uuid
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 from .config import Settings
+from .hands_tasks import register_task_tools
 from .tools import RegisteredTool, ToolRegistry
 
 USER_AGENT = (
@@ -381,4 +384,5 @@ def build_all_tools(store: Any, settings: Settings) -> ToolRegistry:
     registry = build_lifeworld_tools(store)
     if settings.hands_enabled:
         register_hands_tools(registry, settings)
+        register_task_tools(registry, settings)
     return registry
