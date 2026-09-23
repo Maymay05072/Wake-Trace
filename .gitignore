@@ -11,3 +11,6 @@ data/
 dist/
 build/
 *.egg-info/
+
+# .env 备份里同样有密钥，禁止提交
+.env.bak*

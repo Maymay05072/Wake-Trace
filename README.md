@@ -304,8 +304,37 @@ cd web
 npm run build
 ```
 
-静态页面位于 `web/dist/client/`。实际部署时还应由 Web 服务器设置内容安全策略、禁止页面被嵌入、
-`nosniff` 和严格的 Referrer Policy；仓库附带的 Sites Worker 已默认设置这些响应头。
+构建会产出三样东西：`web/dist/client/`（静态页面本体）、`web/dist/server/index.js`（给 Sites 用的
+Worker，只负责给静态资源补安全响应头）、`web/dist/.openai/hosting.json`（部署元数据）。
+
+### 关于 `web/.openai/hosting.json`
+
+这个文件是打包的**必需输入**，缺了它 `npm run build` 会直接报 `Missing Sites build input`。它声明
+部署平台要绑定的资源，字段只有两个：
+
+```json
+{
+  "d1": null,
+  "r2": null
+}
+```
+
+`d1` 是 D1 数据库的绑定名，`r2` 是 R2 对象存储的绑定名；没有对应资源就写 `null`——本仓库不使用
+数据库与对象存储，所以两个字段都是 `null`。**即使不部署到 Sites 也不要删掉这个文件**，构建脚本会
+把它复制成 `web/dist/.openai/hosting.json`。
+
+### 在本机运行网页
+
+不需要任何外部托管：`waketrace start` 会同时运行调度器、API、MCP 和已经构建好的页面（取自
+`WAKETRACE_WEB_DIST_PATH`，默认 `./web/dist/client`），浏览器打开 `http://127.0.0.1:8765/` 即可。
+`waketrace serve` 只跑 API 与 MCP，**不会**挂载网页。页面与接口同源时不需要配置
+`WAKETRACE_WEB_ORIGINS`。
+
+### 自行托管静态页面
+
+把 `web/dist/client/` 交给任意静态 Web 服务器即可。实际部署时还应由 Web 服务器设置内容安全策略、
+禁止页面被嵌入、`nosniff` 和严格的 Referrer Policy；仓库附带的 Sites Worker 已默认设置这些响应头，
+自行托管时需要在服务器侧配置同等的响应头。
 
 向生活世界投递一个事件：
 
@@ -499,3 +528,33 @@ WakeTrace 源码公开，采用 [PolyForm Noncommercial License 1.0.0](LICENSE)�
 
 许可证适用于本仓库的代码和文档。私人聊天、密钥、配置与生活数据不属于本仓库的交付内容，
 请勿将它们提交到公开仓库。
+
+## Wake-time hands
+
+Autonomous wakes used to reach only `thread_*` and `artifact_*`. With hands enabled
+(`WAKETRACE_HANDS_ENABLED=true`, on by default) the model also gets real tools:
+
+| tool | what it does |
+| --- | --- |
+| `web_read` | fetch a page and return plain text |
+| `api_call` | raw HTTP, optional bearer token read from `WAKETRACE_HANDS_SECRETS_FILE` |
+| `file_read` | read or list inside `WAKETRACE_HANDS_READ_ROOTS` |
+| `file_write` | append/overwrite inside `WAKETRACE_HANDS_WRITE_ROOTS` |
+| `run_command` | shell command with a denylist and timeout |
+
+Paths outside the allowed roots are refused. Logged-in or JS-only sites (Xiaohongshu,
+for example) return almost nothing, and the tool says so instead of inventing content.
+
+Self-check: `.venv/bin/python tools/hands_selftest.py`
+
+## 醒来时的工具（14 只）
+
+线头/作品：`thread_list` `thread_open` `thread_continue` `thread_close` `artifact_list` `artifact_create`
+
+手：`web_read` `api_call` `file_read` `file_write` `run_command`
+
+小红书：`xhs_read`（短链也认，读标题/正文/标签/作者/互动数/热评）、`xhs_task`、`xhs_results`
+
+其中 `xhs_read` 走页面内嵌的 `window.__INITIAL_STATE__`，不需要登录。
+Operit 那边的 `xhsreader_pro` 插件对分享链会回「未找到笔记内容」，所以借手桥的读取端也换成了这个模块（`tools/xhs_worker.py`），不再依赖插件。
+任务收件箱：`/sdcard/Download/Operit/wake_tasks`（`inbox.jsonl` 挂任务、`claims.jsonl` 记认领、`last_result.txt` 放回执），同一条只跑一次。

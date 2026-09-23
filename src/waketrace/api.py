@@ -15,7 +15,7 @@ from pydantic import BaseModel, Field, field_validator
 from . import __version__
 from .config import Settings
 from .engine import WakeEngine
-from .lifeworld import build_lifeworld_tools
+from .hands import build_all_tools
 from .mcp_server import build_mcp_server
 from .models import WakeSeed
 from .notifiers import WebPushNotifier
@@ -65,7 +65,7 @@ def create_app(
             settings,
             store,
             OpenAICompatibleProvider(settings),
-            build_lifeworld_tools(store),
+            build_all_tools(store, settings),
             WebPushNotifier(settings, store),
         )
 
