@@ -23,6 +23,7 @@ from .models import WakeSeed
 from .notifiers import WebPushNotifier
 from .providers import OpenAICompatibleProvider
 from .scheduler import WakeScheduler
+from .setup import configuration_checklist, run_connection_test
 from .storage import SQLiteStore
 
 
@@ -171,6 +172,18 @@ def create_app(
             "next_wake_at": result.next_wake_at.isoformat(),
         }
 
+    @app.get("/world/setup", dependencies=[Depends(authorize_read)])
+    def setup_checklist(response: Response) -> dict[str, Any]:
+        response.headers["Cache-Control"] = "no-store"
+        return configuration_checklist(engine)
+
+    @app.post("/admin/tests/{target}", dependencies=[Depends(authorize_admin)])
+    def connection_test(target: str, response: Response) -> dict[str, Any]:
+        response.headers["Cache-Control"] = "no-store"
+        if target not in {"model", "notification"}:
+            raise HTTPException(404, "unknown connection test")
+        return run_connection_test(engine, target)
+
     @app.post("/subscriptions", dependencies=[Depends(authorize_admin)])
     def subscribe(payload: SubscriptionRequest) -> dict[str, bool]:
         engine.store.add_subscription(payload.subscription)
@@ -187,11 +200,13 @@ def create_app(
         return {"event_id": event_id}
 
     @app.get("/world/timeline", dependencies=[Depends(authorize_read)])
-    def timeline(limit: int = Query(default=30, ge=1, le=100)) -> dict[str, Any]:
+    def timeline(response: Response, limit: int = Query(default=30, ge=1, le=100)) -> dict[str, Any]:
+        response.headers["Cache-Control"] = "no-store"
         return {"timeline": engine.store.recent_timeline(limit)}
 
     @app.get("/world/timeline/{trace_id}", dependencies=[Depends(authorize_read)])
-    def timeline_detail(trace_id: int) -> dict[str, Any]:
+    def timeline_detail(trace_id: int, response: Response) -> dict[str, Any]:
+        response.headers["Cache-Control"] = "no-store"
         detail = engine.store.timeline_detail(trace_id)
         if detail is None:
             raise HTTPException(404, "timeline entry not found")

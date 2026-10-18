@@ -197,6 +197,8 @@ class WakeEngine:
             fact_source=fact_source,
             evidence=[asdict(item) for item in evidence],
             now=now,
+            requested_outcome=draft.outcome,
+            notification_reason=notification_reason,
         )
         next_at = self.policy.choose_next(
             now,

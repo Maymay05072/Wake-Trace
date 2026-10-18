@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "waketrace"
-version = "2.1.0"
+version = "2.2.0"
 description = "A lightweight-continuity wake runtime for relational AI companions."
 readme = "README.md"
 license = "PolyForm-Noncommercial-1.0.0"

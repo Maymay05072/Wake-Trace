@@ -37,7 +37,7 @@ class WebPushNotifier:
             {
                 "title": title,
                 "body": body,
-                "tag": "waketrace-message",
+                "tag": "waketrace-test" if message_id.startswith("waketrace-test-") else "waketrace-message",
                 "messageId": message_id,
             },
             ensure_ascii=False,
@@ -52,6 +52,7 @@ class WebPushNotifier:
                     vapid_private_key=self.settings.vapid_private_key,
                     vapid_claims={"sub": self.settings.vapid_claims_email},
                     ttl=3600,
+                    timeout=10,
                 )
                 delivered += 1
             except WebPushException as exc:

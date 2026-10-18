@@ -149,5 +149,8 @@ def test_wake_diagnostics_explain_decision_without_private_text(
     assert f"outcome={expected_outcome}" in caplog.text
     assert f"notification_reason={expected_reason}" in caplog.text
     assert "PRIVATE_" not in caplog.text
+    entry = store.timeline_detail(store.recent_timeline(1)[0]["id"])
+    assert entry["requested_outcome"] == requested
+    assert entry["notification_reason"] == expected_reason
 
 

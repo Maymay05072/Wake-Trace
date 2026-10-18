@@ -4,6 +4,7 @@ import {
   LinkSimple, List, ListBullets, Wrench, X,
 } from "@phosphor-icons/react";
 import { RuntimePage } from "./RuntimePage";
+import { SetupGuide } from "./SetupGuide";
 
 const STORAGE_KEY = "waketrace-web-settings";
 const TOKEN_STORAGE_KEY = "waketrace-web-token";
@@ -172,12 +173,21 @@ function ToolList({ tools = [] }) {
   if (!tools.length) return <p className="muted">这次醒来没有调用工具。</p>;
   return <div className="tool-list">{tools.map((tool, index) =>
     <div className="tool-row" key={`${tool.tool_name}-${index}`}><Wrench size={20} />
-      <div><strong>{tool.tool_name}</strong><span>{tool.ok ? "成功" : "未完成"} · {tool.summary}</span></div>
+      <div><strong>{tool.tool_name}</strong><span className={tool.ok ? "" : "runtime-error-text"}>{tool.ok ? "成功" : "失败"} · {tool.summary || "未记录摘要"}</span></div>
       <time>{formatTime(tool.created_at)}</time>
     </div>)}</div>;
 }
 
-function DetailPane({ entry, onBack }) {
+const notificationReasons = {
+  not_requested: "本次没有请求发送通知。",
+  duplicate: "与最近已发送消息相近，已拦截重复通知。",
+  quiet_hours: "处于通知静默时段，消息保留为私人留痕；当前版本不会自动补送。",
+  delivery_failed: "通知渠道未确认送达，已保留为私人留痕；当前版本不会自动补送。",
+  sent: "通知渠道已接受发送。请以接收端实际收到为准。",
+};
+const factSources = { self_report: "模型自述", tool_evidence: "工具执行证据", mixed: "模型自述与工具执行证据" };
+
+function DetailPane({ entry, onBack, loading, error, retry }) {
   if (!entry) return null;
   return <aside className="detail-pane" aria-label="行径详情">
     <button type="button" className="mobile-back" onClick={onBack}><ArrowLeft size={20} />返回行径</button>
@@ -187,10 +197,22 @@ function DetailPane({ entry, onBack }) {
       <span>触发：{triggerLabels[entry.trigger_kind] || entry.trigger_kind}</span>
       {entry.tool_events?.length > 0 && <span>使用了 {entry.tool_events.length} 个工具</span>}
     </div>
-    <section><h3>醒来的缘由</h3><p>{entry.seed_summary || "没有留下额外的缘由说明。"}</p></section>
-    <section><h3>经历</h3><p>{entry.content || "这次醒来没有留下正文。"}</p></section>
-    <section><h3>留下的事实</h3><p>{entry.fact || "没有留下需要承接的事实。"}</p></section>
-    <section><h3>工具记录</h3><ToolList tools={entry.tool_events} /></section>
+    {loading && <p role="status">正在读取完整行径…</p>}
+    {error && <div className="runtime-notice" role="alert"><p>{error}</p><button type="button" className="secondary-button" onClick={retry}>重试详情</button></div>}
+    {!loading && !error && <>
+      <section><h3>1 · 醒来的缘由</h3><p>{entry.seed_summary || "没有留下额外的缘由说明。"}</p></section>
+      <section><h3>2 · 工具执行</h3><ToolList tools={entry.tool_events} />
+        <p className="muted">这里展示真实执行记录；正文中提到某项活动，不等于已经调用过工具。</p></section>
+      <section><h3>3 · 最终结果</h3><dl className="decision-facts">
+        <div><dt>模型选择</dt><dd>{outcomeLabels[entry.requested_outcome] || "旧记录未保存"}</dd></div>
+        <div><dt>最终保存</dt><dd>{outcomeLabels[entry.outcome] || "未知"}</dd></div>
+      </dl><h4>经历</h4><p>{entry.content || "这次醒来没有留下正文。"}</p>
+        <h4>留下的事实</h4><p>{entry.fact || "没有留下需要承接的事实。"}</p>
+        {entry.fact_source && <p className="muted">事实来源：{factSources[entry.fact_source] || "未记录"}。模型自述不作为工具执行证明。</p>}</section>
+      <section><h3>4 · 通知状态</h3><p>{notificationReasons[entry.notification_reason] || (entry.notified ? "旧记录显示通知渠道已接受发送，具体原因未记录。" : "旧记录未保存具体通知原因，无法确定未发送的原因。")}</p>
+        {entry.share && <><h4>原拟发送的消息</h4><p>{entry.share}</p></>}
+      </section>
+    </>}
   </aside>;
 }
 
@@ -212,7 +234,7 @@ function EmptyState({ title, text }) {
   return <div className="empty-state"><FileText size={34} /><h2>{title}</h2><p>{text}</p></div>;
 }
 
-function TimelinePage({ entries, selected, setSelected, openDetail, notice, machineName }) {
+function TimelinePage({ entries, selected, setSelected, openDetail, notice, machineName, detailState }) {
   const groups = groupEntriesByDate(entries);
   return <div className="timeline-layout">
     <section className="timeline-pane">
@@ -225,9 +247,9 @@ function TimelinePage({ entries, selected, setSelected, openDetail, notice, mach
           <TraceItem key={entry.id} entry={entry} selected={selected?.id === entry.id}
             onSelect={() => setSelected(entry)} openDetail={openDetail} />)}</div>
       </section>)
-        : <EmptyState title="还没有行径" text="小机下一次醒来后，经历会出现在这里。" />}
+        : <EmptyState title="还没有行径" text={notice || "小机下一次醒来后，经历会出现在这里。"} />}
     </section>
-    <DetailPane entry={selected} onBack={() => {}} />
+    <DetailPane entry={selected} onBack={() => {}} {...detailState} />
   </div>;
 }
 
@@ -246,21 +268,24 @@ function SettingsPage({ settings, saveSettings, serverVersion, setServerVersion 
   const [connection, setConnection] = useState(settings.apiBase ? "idle" : "empty");
   const [saved, setSaved] = useState(false);
   useEffect(() => setDraft(settings), [settings]);
-  const update = (key, value) => { setDraft((current) => ({ ...current, [key]: value })); setSaved(false); };
+  const update = (key, value) => { setDraft((current) => ({ ...current, [key]: value })); setSaved(false); if (key === "apiBase") setConnection("idle"); };
   const testConnection = async () => {
     if (!cleanBaseUrl(draft.apiBase)) { setConnection("empty"); return; }
     setConnection("testing");
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15000);
     try {
-      const response = await fetch(`${cleanBaseUrl(draft.apiBase)}/health`);
+      const response = await fetch(`${cleanBaseUrl(draft.apiBase)}/health`, { signal: controller.signal });
       if (!response.ok) throw new Error("health request failed");
       const data = await response.json();
       setServerVersion(data.version || "未知");
       setConnection("ok");
     }
     catch { setServerVersion("未知"); setConnection("error"); }
+    finally { clearTimeout(timeout); }
   };
   const submit = (event) => { event.preventDefault(); saveSettings({ ...draft, apiBase: cleanBaseUrl(draft.apiBase) }); setSaved(true); };
-  const statusText = { empty: "尚未配置", idle: "等待测试", testing: "正在连接…", ok: "已连接", error: "连接失败" }[connection];
+  const statusText = { empty: "尚未配置", idle: "等待检查", testing: "正在连接…", ok: "服务可达 · 令牌请在下方清单验证", error: "连接失败" }[connection];
 
   return <section className="simple-page settings-page"><header className="page-heading"><h1>设置</h1></header><form onSubmit={submit}>
     <section className="form-section"><div className="section-title"><h2>小机</h2></div>
@@ -278,13 +303,14 @@ function SettingsPage({ settings, saveSettings, serverVersion, setServerVersion 
           onChange={(event) => update("rememberToken", event.target.checked)} />在此设备长期保存令牌</label>
       </div></div>
       <div className="connection-row"><span className={`connection-status status-${connection}`}><i aria-hidden="true" />{statusText}</span>
-        <button type="button" className="secondary-button" onClick={testConnection}>测试连接</button></div>
+        <button type="button" className="secondary-button" disabled={connection === "testing"} onClick={testConnection}>检查服务地址</button></div>
     </section>
     <div className="save-row"><button type="submit" className="primary-button">保存设置</button>{saved && <span role="status">设置已保存</span>}</div>
+  </form><SetupGuide settings={settings} />
     <section className="form-section about-section"><div className="section-title"><h2>关于</h2></div><dl>
       <div><dt>WakeTrace 版本</dt><dd>{serverVersion}</dd></div><div><dt>开源许可</dt><dd>PolyForm Noncommercial 1.0.0</dd></div>
     </dl></section>
-  </form></section>;
+  </section>;
 }
 
 export function App() {
@@ -294,6 +320,9 @@ export function App() {
   const [entries, setEntries] = useState(demoEntries);
   const [selectedId, setSelectedId] = useState(demoEntries[0].id);
   const [detailOpen, setDetailOpen] = useState(false);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState("");
+  const [detailRetry, setDetailRetry] = useState(0);
   const [threads, setThreads] = useState([]);
   const [threadsLoading, setThreadsLoading] = useState(false);
   const [serverVersion, setServerVersion] = useState(settings.apiBase ? "读取中…" : "未连接");
@@ -311,7 +340,12 @@ export function App() {
   }, [settings.apiBase]);
 
   useEffect(() => {
-    if (!settings.apiBase || !settings.token) return;
+    setDetailOpen(false);
+    if (!settings.apiBase || !settings.token) {
+      setEntries(demoEntries); setSelectedId(demoEntries[0].id);
+      setNotice("尚未连接服务器，正在展示示例行径。"); return;
+    }
+    setEntries([]); setSelectedId(null); setNotice("正在读取行径…");
     const controller = new AbortController();
     fetch(`${cleanBaseUrl(settings.apiBase)}/world/timeline?limit=30`, {
       headers: { Authorization: `Bearer ${settings.token}` }, signal: controller.signal,
@@ -319,7 +353,7 @@ export function App() {
       .then(({ timeline }) => {
         if (!Array.isArray(timeline)) throw new Error("invalid timeline");
         setEntries(timeline); setSelectedId(timeline[0]?.id ?? null); setNotice("");
-      }).catch((error) => { if (error.name !== "AbortError") setNotice("暂时无法连接服务器，正在展示示例行径。"); });
+      }).catch((error) => { if (error.name !== "AbortError") setNotice("暂时无法读取行径，请到设置检查连接与令牌。"); });
     return () => controller.abort();
   }, [settings.apiBase, settings.token]);
 
@@ -335,21 +369,31 @@ export function App() {
 
   useEffect(() => {
     const entry = entries.find((item) => item.id === selectedId);
+    setDetailError(""); setDetailLoading(false);
     if (!entry || !settings.apiBase || !settings.token || entry.tool_events) return undefined;
+    let cancelled = false;
     const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15000);
+    setDetailLoading(true);
     const loadDetail = async () => {
       try {
         const response = await fetch(`${cleanBaseUrl(settings.apiBase)}/world/timeline/${entry.id}`, {
           headers: { Authorization: `Bearer ${settings.token}` }, signal: controller.signal,
         });
-        if (!response.ok) return;
+        if (!response.ok) throw new Error(response.status === 401 ? "令牌无效，请到设置检查连接。" : "无法读取完整行径，请稍后重试。");
         const data = await response.json();
-        setEntries((current) => current.map((item) => item.id === entry.id ? data.entry : item));
-      } catch { /* Keep the list usable if detail loading fails. */ }
+        if (!data.entry || !Array.isArray(data.entry.tool_events)) throw new Error("详情格式不兼容，请更新后端。");
+        if (!cancelled) setEntries((current) => current.map((item) => item.id === entry.id ? data.entry : item));
+      } catch (cause) {
+        if (!cancelled) setDetailError(cause.name === "AbortError" ? "详情读取超时，请稍后重试。" : "无法读取完整行径，请检查连接、令牌或后端版本后重试。");
+      } finally {
+        clearTimeout(timeout);
+        if (!cancelled) setDetailLoading(false);
+      }
     };
     loadDetail();
-    return () => controller.abort();
-  }, [selectedId, entries, settings.apiBase, settings.token]);
+    return () => { cancelled = true; clearTimeout(timeout); controller.abort(); };
+  }, [selectedId, entries, settings.apiBase, settings.token, detailRetry]);
 
   const selectEntry = (entry) => {
     setSelectedId(entry.id);
@@ -368,14 +412,15 @@ export function App() {
     setSettings(normalized);
   };
   const navProps = { view, setView: (next) => { setView(next); setDetailOpen(false); }, settings, serverVersion };
+  const detailState = { loading: detailLoading, error: detailError, retry: () => setDetailRetry((value) => value + 1) };
 
   return <div className="app-shell"><Sidebar {...navProps} />
     <MobileHeader settings={settings} open={drawerOpen} openMenu={() => setDrawerOpen(true)} />
     <MobileDrawer open={drawerOpen} close={() => setDrawerOpen(false)} {...navProps} />
     <main className={`main-content view-${view} ${detailOpen ? "mobile-detail-open" : ""}`}>
       {view === "traces" && <><TimelinePage entries={entries} selected={selected} setSelected={selectEntry}
-        openDetail={() => setDetailOpen(true)} notice={notice} machineName={settings.machineName} />
-        <div className="mobile-detail-page"><DetailPane entry={selected} onBack={() => setDetailOpen(false)} /></div></>}
+        openDetail={() => setDetailOpen(true)} notice={notice} machineName={settings.machineName} detailState={detailState} />
+        <div className="mobile-detail-page"><DetailPane entry={selected} onBack={() => setDetailOpen(false)} {...detailState} /></div></>}
       {view === "threads" && <ThreadsPage threads={threads} loading={threadsLoading} />}
       {view === "runtime" && <RuntimePage settings={settings} />}
       {view === "settings" && <SettingsPage settings={settings} saveSettings={saveSettings}

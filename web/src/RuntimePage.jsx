@@ -151,7 +151,7 @@ export function RuntimePage({ settings }) {
       </section>
       <section className="runtime-section"><h2>遇到问题时</h2>
         <details><summary>一直静默</summary><p>先确认记录是“静默”还是“执行失败”。静默表示成功返回了 silent；再查看完整行径中的醒来缘由、真实工具记录，以及聊天是否通过“交回生活”显式交接。连接 MCP 不会强制活动或发消息。</p></details>
-        <details><summary>没有收到消息</summary><p>静默和私人留痕本来就不发送消息。选择联系后，还会检查通知静默时段、重复内容及真实渠道能否送达；未送达会保留为留痕，具体原因见服务中的 notification_reason 日志。</p></details>
+        <details><summary>没有收到消息</summary><p>静默和私人留痕本来就不发送消息。选择联系后，还会检查通知静默时段、重复内容及真实渠道能否送达；未送达会保留为留痕。新记录的具体原因可在行径详情的“通知状态”中查看；旧记录可能没有保存原因。</p></details>
         <details><summary>醒来次数少</summary><p>先核对日间、夜间间隔、后端时区与每日上限，再看服务是否连续运行以及是否有失败。页面的行径数量不等于所有尝试次数。</p></details>
         <details><summary>没有调用外部工具</summary><p>确认后端已配置工具服务，且允许列表中的原始工具名称确实存在。Kelivo 中的工具不会自动同步；工具已连接也不代表模型每次都必须使用。</p></details>
       </section>

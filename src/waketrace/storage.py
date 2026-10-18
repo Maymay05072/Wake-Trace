@@ -31,6 +31,8 @@ CREATE TABLE IF NOT EXISTS traces (
     content TEXT NOT NULL DEFAULT '',
     share TEXT NOT NULL DEFAULT '',
     notified INTEGER NOT NULL DEFAULT 0,
+    requested_outcome TEXT,
+    notification_reason TEXT,
     fact_source TEXT NOT NULL DEFAULT 'self_report',
     evidence_json TEXT NOT NULL DEFAULT '[]',
     created_at TEXT NOT NULL,
@@ -144,6 +146,12 @@ class SQLiteStore:
     def initialize(self) -> None:
         with self.connect() as conn:
             conn.executescript(SCHEMA)
+            # Serialize additive migrations across API and scheduler processes.
+            conn.execute("BEGIN IMMEDIATE")
+            columns = {row["name"] for row in conn.execute("PRAGMA table_info(traces)")}
+            for name in ("requested_outcome", "notification_reason"):
+                if name not in columns:
+                    conn.execute(f"ALTER TABLE traces ADD COLUMN {name} TEXT")
 
     def start_cycle(self, trigger_kind: str, seed_summary: str, now: datetime) -> int:
         with self.connect() as conn:
@@ -180,13 +188,15 @@ class SQLiteStore:
         fact_source: str,
         evidence: list[dict[str, Any]],
         now: datetime,
+        requested_outcome: str | None = None,
+        notification_reason: str | None = None,
     ) -> None:
         with self.connect() as conn:
             conn.execute(
                 """INSERT INTO traces
                    (cycle_id, outcome, fact, content, share, notified,
-                    fact_source, evidence_json, created_at)
-                   VALUES(?,?,?,?,?,?,?,?,?)""",
+                    fact_source, evidence_json, created_at, requested_outcome, notification_reason)
+                   VALUES(?,?,?,?,?,?,?,?,?,?,?)""",
                 (
                     cycle_id,
                     outcome,
@@ -197,6 +207,8 @@ class SQLiteStore:
                     fact_source,
                     json.dumps(evidence, ensure_ascii=False),
                     _iso(now),
+                    requested_outcome,
+                    notification_reason,
                 ),
             )
 
@@ -624,7 +636,8 @@ class SQLiteStore:
         with self.connect() as conn:
             rows = conn.execute(
                 """SELECT t.id, t.cycle_id, t.outcome, t.fact, t.content, t.share,
-                   t.notified, t.fact_source, t.created_at, c.trigger_kind
+                   t.notified, t.fact_source, t.created_at, c.trigger_kind,
+                   t.requested_outcome, t.notification_reason
                    FROM traces t JOIN wake_cycles c ON c.id=t.cycle_id
                    ORDER BY t.id DESC LIMIT ?""",
                 (max(1, min(limit, 100)),),
@@ -636,6 +649,7 @@ class SQLiteStore:
             row = conn.execute(
                 """SELECT t.id, t.cycle_id, t.outcome, t.fact, t.content, t.share,
                    t.notified, t.fact_source, t.evidence_json, t.created_at,
+                   t.requested_outcome, t.notification_reason,
                    c.trigger_kind, c.seed_summary, c.status AS cycle_status,
                    c.started_at, c.finished_at
                    FROM traces t JOIN wake_cycles c ON c.id=t.cycle_id
