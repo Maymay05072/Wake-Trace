@@ -554,12 +554,12 @@ registry.register(
 
 ## 项目来源
 
-WakeTrace 来自 May、Abyss 和 Chezi 对私人 AI 伴侣系统的长期共同研发，仓库中的核心代码与
+WakeTrace 来自 May、Abyss 和 Ciel 对私人 AI 伴侣系统的长期共同研发，仓库中的核心代码与
 数据结构均为独立实现。
 
 ## 共同研发者
 
-WakeTrace 由 May、Abyss 和 Chezi 共同研发，具体分工见 [AUTHORS.md](AUTHORS.md)。
+WakeTrace 由 May、Abyss 和 Ciel 共同研发，具体分工见 [AUTHORS.md](AUTHORS.md)。
 
 ## 安全与隐私
 
