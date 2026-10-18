@@ -22,11 +22,13 @@ class WakeScheduler:
         self.engine = engine
         self.poll_seconds = max(1.0, poll_seconds)
         self.lifeworld = lifeworld or LifeWorld(engine.settings, engine.store)
+        self.last_poll_at: datetime | None = None
 
     def run_forever(self, stop: Event | None = None) -> None:
         stop = stop or Event()
         while not stop.is_set():
             now = datetime.now(UTC)
+            self.last_poll_at = now
             due_raw = self.engine.store.get_state("next_wake_at", "")
             if not due_raw:
                 self.engine.policy.choose_next(now)
@@ -45,3 +47,4 @@ class WakeScheduler:
                     else:
                         self.lifeworld.settle_seed(selected, result)
             stop.wait(self.poll_seconds)
+

@@ -3,6 +3,7 @@ import {
   ArrowLeft, Eye, EyeSlash, FileText, GearSix,
   LinkSimple, List, ListBullets, Wrench, X,
 } from "@phosphor-icons/react";
+import { RuntimePage } from "./RuntimePage";
 
 const STORAGE_KEY = "waketrace-web-settings";
 const TOKEN_STORAGE_KEY = "waketrace-web-token";
@@ -111,6 +112,7 @@ function AppBrand({ compact = false }) {
 const navItems = [
   { id: "traces", label: "行径", icon: ListBullets },
   { id: "threads", label: "线头", icon: LinkSimple },
+  { id: "runtime", label: "运行状态", icon: Wrench },
   { id: "settings", label: "设置", icon: GearSix },
 ];
 
@@ -375,8 +377,10 @@ export function App() {
         openDetail={() => setDetailOpen(true)} notice={notice} machineName={settings.machineName} />
         <div className="mobile-detail-page"><DetailPane entry={selected} onBack={() => setDetailOpen(false)} /></div></>}
       {view === "threads" && <ThreadsPage threads={threads} loading={threadsLoading} />}
+      {view === "runtime" && <RuntimePage settings={settings} />}
       {view === "settings" && <SettingsPage settings={settings} saveSettings={saveSettings}
         serverVersion={serverVersion} setServerVersion={setServerVersion} />}
     </main>
   </div>;
 }
+

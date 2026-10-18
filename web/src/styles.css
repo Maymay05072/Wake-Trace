@@ -205,3 +205,51 @@ nav button.active::before { background: var(--accent); }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; transition-duration: 0.01ms !important; }
 }
+
+.runtime-page { max-width: 1160px; }
+.runtime-heading { display: flex; align-items: center; justify-content: space-between; gap: 20px; }
+.runtime-heading h1 { margin-top: 0; }.runtime-heading p { margin-bottom: 0; }
+.runtime-heading button { flex-shrink: 0; }
+.runtime-page button:disabled { opacity: .55; cursor: wait; }
+.runtime-updated, .runtime-page .muted, .runtime-check p, .runtime-check small { color: var(--muted); font-size: .88rem; line-height: 1.75; }
+.runtime-cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; margin: 24px 0 34px; }
+.runtime-cards article { display: flex; flex-direction: column; gap: 12px; border: 1px solid var(--line); background: var(--selected); padding: 24px; }
+.runtime-cards article > span { font-size: .9rem; color: var(--muted); }
+.runtime-cards strong { font: 600 clamp(1.05rem, 2vw, 1.45rem)/1.5 var(--serif); }
+.runtime-cards small { color: var(--muted); line-height: 1.6; }
+.runtime-section { border-top: 1px solid var(--line); padding: 24px 0; }
+.runtime-section h2 { font: 700 1.1rem/1.5 var(--serif); margin: 0 0 18px; }
+.runtime-subheading { font-size: .98rem; margin: 26px 0 12px; }
+.runtime-notice { padding: 16px 18px; background: var(--paper-deep); line-height: 1.7; }
+.runtime-error { border-left: 3px solid var(--danger); }.runtime-error-text { color: var(--danger); }
+.runtime-ok-text { color: var(--success); }
+.runtime-status-line { display: flex; align-items: center; gap: 10px; }
+.runtime-status-line i { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+.runtime-ok { background: var(--success); }.runtime-neutral { background: var(--muted); }
+.runtime-facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px 28px; margin: 22px 0 0; }
+.runtime-facts > div { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px 14px; }
+.runtime-facts dt { color: var(--muted); font-size: .88rem; }.runtime-facts dd { margin: 0; font-size: .9rem; }
+.runtime-check { padding: 16px 0; border-bottom: 1px solid var(--line); overflow-wrap: anywhere; }
+.runtime-check > strong { display: inline-block; margin-right: 18px; }
+.runtime-check > span { font-size: .9rem; }.runtime-check p { margin: 8px 0 0; }
+.runtime-cycles { padding: 0; list-style: none; }
+.runtime-cycles li { padding: 17px 0; border-bottom: 1px solid var(--line); }
+.runtime-cycle-heading { display: flex; justify-content: space-between; gap: 16px; align-items: baseline; }
+.runtime-cycle-heading strong { font-size: .95rem; }.runtime-cycle-heading time { color: var(--muted); font-size: .85rem; flex-shrink: 0; }
+.runtime-cycles p { margin: 9px 0 0; line-height: 1.7; font-size: .9rem; }
+.runtime-section details { border-bottom: 1px solid var(--line); padding: 15px 0; }
+.runtime-section summary { cursor: pointer; font-size: .95rem; padding-block: 6px; line-height: 1.6; }
+.runtime-section details p { color: var(--muted); line-height: 1.85; font-size: .9rem; }
+.runtime-section textarea { width: 100%; min-height: 220px; padding: 14px; margin-top: 14px; background: var(--detail); border: 1px solid var(--line); color: var(--ink); font: .82rem/1.65 monospace; resize: vertical; }
+.runtime-section textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+@media (max-width: 820px) {
+  .runtime-heading { align-items: flex-start; }.runtime-heading h1 { margin-bottom: 10px; }
+  .runtime-heading .secondary-button { min-height: 44px; padding-inline: 14px; }
+  .runtime-cards { grid-template-columns: 1fr; gap: 12px; margin-block: 22px; }
+  .runtime-cards article { padding: 20px; gap: 8px; }.runtime-cards strong { font-size: 1.25rem; }
+  .runtime-facts { grid-template-columns: 1fr; gap: 17px; }
+  .runtime-cycle-heading { flex-wrap: wrap; gap: 7px; }
+  .runtime-check > strong { display: block; margin: 0 0 6px; }
+  .runtime-updated { font-size: .8rem; }.runtime-section { padding-block: 22px; }
+}
+

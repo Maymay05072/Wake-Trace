@@ -14,6 +14,7 @@ import re
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Literal
 from urllib.parse import urlsplit
@@ -209,6 +210,19 @@ class ExternalMCPRegistry(ToolRegistry):
         self._discovered: set[str] = set()
         self._retry_after: dict[str, float] = {}
         self._lock = threading.RLock()
+        self._diagnostic_status: dict[str, dict[str, Any]] = {}
+
+    def diagnostics(self) -> list[dict[str, Any]]:
+        # Read snapshots without waiting for a network discovery holding _lock.
+        return [
+            {
+                "name": name, "transport": server.transport,
+                "allowed_count": len(server.allowed_tools),
+                "state": "pending", "tool_count": 0, "missing_count": 0,
+                **self._diagnostic_status.get(name, {}),
+            }
+            for name, server in self.config.servers.items()
+        ]
 
     def specifications(self) -> list[dict[str, Any]]:
         with self._lock:
@@ -237,9 +251,19 @@ class ExternalMCPRegistry(ToolRegistry):
                             "external MCP tools missing server=%s count=%s", name, len(missing)
                         )
                     self._discovered.add(name)
+                    self._diagnostic_status[name] = {
+                        "state": "partial" if missing else "ready",
+                        "tool_count": len(available), "missing_count": len(missing),
+                        "checked_at": datetime.now(UTC).isoformat(), "error_code": None,
+                    }
                     logger.info("external MCP ready server=%s tools=%s", name, len(available))
                 except Exception as exc:  # noqa: BLE001 - isolate third-party transport failures
                     self._retry_after[name] = time.monotonic() + 60
+                    self._diagnostic_status[name] = {
+                        "state": "unavailable", "tool_count": 0,
+                        "checked_at": datetime.now(UTC).isoformat(),
+                        "error_code": _failure_code(exc),
+                    }
                     logger.warning(
                         "external MCP discovery failed server=%s error_code=%s "
                         "error_type=%s retry_seconds=60",
@@ -254,13 +278,21 @@ class ExternalMCPRegistry(ToolRegistry):
             return super().execute(name, arguments)
         return self.builtin.execute(name, arguments)
 
-    @staticmethod
-    def _handler(name: str, server: RemoteServer, remote_name: str):
+    def _handler(self, name: str, server: RemoteServer, remote_name: str):
         def call(arguments: dict[str, Any]) -> dict[str, Any]:
             try:
                 result = _run_request(server, remote_name, arguments)
+                previous = self._diagnostic_status.get(name, {})
+                self._diagnostic_status[name] = {
+                    **previous, "state": "partial" if previous.get("missing_count") else "ready",
+                    "checked_at": datetime.now(UTC).isoformat(), "error_code": None,
+                }
                 return _bounded_result(result, server.max_result_chars)
             except Exception as exc:  # noqa: BLE001 - external MCP errors vary by transport
+                self._diagnostic_status[name] = {
+                    **self._diagnostic_status.get(name, {}), "state": "unavailable",
+                    "checked_at": datetime.now(UTC).isoformat(), "error_code": _failure_code(exc),
+                }
                 logger.warning(
                     "external MCP call failed server=%s error_code=%s error_type=%s",
                     name, _failure_code(exc), type(exc).__name__,

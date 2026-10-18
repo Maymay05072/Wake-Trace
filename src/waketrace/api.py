@@ -6,7 +6,7 @@ from datetime import UTC, datetime
 from threading import Event, Thread
 from typing import Any
 
-from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
+from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -14,6 +14,7 @@ from pydantic import BaseModel, Field, field_validator
 
 from . import __version__
 from .config import Settings
+from .diagnostics import runtime_diagnostics
 from .engine import WakeEngine
 from .external_mcp import with_external_mcp
 from .lifeworld import build_lifeworld_tools
@@ -74,10 +75,11 @@ def create_app(
     mcp_app = mcp_server.streamable_http_app()
     stop_scheduler = Event()
     scheduler_thread: Thread | None = None
+    scheduler: WakeScheduler | None = None
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI):
-        nonlocal scheduler_thread
+        nonlocal scheduler_thread, scheduler
         async with mcp_server.session_manager.run():
             if run_scheduler and settings.scheduler_enabled:
                 scheduler = WakeScheduler(engine, poll_seconds)
@@ -144,6 +146,16 @@ def create_app(
             "next_wake_at": engine.store.get_state("next_wake_at", None),
             "last_successful_wake_at": engine.store.get_state("last_successful_wake_at", None),
             "wake_counters": engine.store.get_state("wake_counters", {}),
+        }
+
+    @app.get("/world/diagnostics", dependencies=[Depends(authorize_read)])
+    def diagnostics(response: Response) -> dict[str, Any]:
+        response.headers["Cache-Control"] = "no-store"
+        return {
+            "version": __version__,
+            **runtime_diagnostics(
+                engine, scheduler, bool(scheduler_thread and scheduler_thread.is_alive())
+            ),
         }
 
     @app.post("/wake", dependencies=[Depends(authorize_admin)])

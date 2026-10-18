@@ -602,6 +602,24 @@ class SQLiteStore:
             ).fetchall()
         return [dict(row) for row in rows]
 
+    def diagnostic_cycles(self, limit: int = 20) -> list[dict[str, Any]]:
+        """Return cycle metadata only; exclude seeds, messages and tool results."""
+        with self.connect() as conn:
+            rows = conn.execute(
+                """SELECT id, status, outcome, error_code, started_at, finished_at
+                   FROM wake_cycles ORDER BY id DESC LIMIT ?""",
+                (max(1, min(limit, 100)),),
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    def last_completed_cycle_at(self) -> str | None:
+        with self.connect() as conn:
+            row = conn.execute(
+                "SELECT finished_at FROM wake_cycles WHERE status='completed' "
+                "ORDER BY id DESC LIMIT 1"
+            ).fetchone()
+        return row["finished_at"] if row else None
+
     def recent_timeline(self, limit: int = 30) -> list[dict[str, Any]]:
         with self.connect() as conn:
             rows = conn.execute(
@@ -641,3 +659,4 @@ class SQLiteStore:
         detail["evidence"] = evidence if isinstance(evidence, list) else []
         detail["tool_events"] = [dict(tool_row) for tool_row in tool_rows]
         return detail
+

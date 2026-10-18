@@ -41,20 +41,27 @@ class OpenAICompatibleProvider:
         }
         if tools:
             body["tools"] = tools
-        response = self.client.post(
-            self.settings.api_base_url,
-            headers={
-                "Authorization": f"Bearer {self.settings.api_key}",
-                "Content-Type": "application/json",
-            },
-            json=body,
-        )
+        try:
+            response = self.client.post(
+                self.settings.api_base_url,
+                headers={
+                    "Authorization": f"Bearer {self.settings.api_key}",
+                    "Content-Type": "application/json",
+                },
+                json=body,
+            )
+        except httpx.TimeoutException:
+            raise ProviderError("provider_request_timeout") from None
+        except httpx.RequestError:
+            raise ProviderError("provider_connection_error") from None
         if not 200 <= response.status_code < 300:
             raise ProviderError(f"provider returned HTTP {response.status_code}")
         try:
             payload = response.json()
             choice = payload["choices"][0]
             message = choice["message"]
+            if not isinstance(choice, dict) or not isinstance(message, dict):
+                raise TypeError("invalid provider message")
         except (ValueError, KeyError, IndexError, TypeError) as exc:
             raise ProviderError("provider returned an invalid response") from exc
 
@@ -80,4 +87,5 @@ class OpenAICompatibleProvider:
         if not calls and (finish_reason != "stop" or not str(content).strip()):
             raise ProviderError("missing final response")
         return ProviderTurn(str(content), tuple(calls), finish_reason)
+
 
