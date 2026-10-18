@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
 from datetime import UTC, datetime
 from typing import Any
 
@@ -59,6 +60,7 @@ def main() -> None:
     timeline.add_argument("--json", action="store_true", dest="as_json")
     args = parser.parse_args()
 
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
     settings = Settings()
     if args.command == "init-db":
         settings.ensure_runtime_dirs()
@@ -114,3 +116,4 @@ def render_timeline(rows: list[dict[str, Any]]) -> str:
                 lines.append(f"{label}：{value}")
         blocks.append("\n".join(lines))
     return "\n\n".join(blocks)
+

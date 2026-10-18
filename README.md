@@ -324,6 +324,8 @@ curl -X POST http://127.0.0.1:8765/world/events \
 MCP 地址是 `http://127.0.0.1:8765/mcp`，使用 `WAKETRACE_MCP_TOKEN` 作为 Bearer Token。它不是模型
 API 代理，也不会接管第三方聊天客户端的每一轮请求。
 
+客户端中已配置的外部 MCP 工具不会自动供 WakeTrace 唤醒引擎使用；当前版本需通过代码适配并注册工具。
+
 不同客户端的配置界面名称可能不同，核心配置都是 MCP URL 与 Authorization Header，例如：
 
 ```json
@@ -499,3 +501,4 @@ WakeTrace 源码公开，采用 [PolyForm Noncommercial License 1.0.0](LICENSE)�
 
 许可证适用于本仓库的代码和文档。私人聊天、密钥、配置与生活数据不属于本仓库的交付内容，
 请勿将它们提交到公开仓库。
+

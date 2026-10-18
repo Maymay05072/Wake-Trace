@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import uuid
 from dataclasses import asdict
 from datetime import UTC, datetime, timedelta
@@ -14,6 +15,8 @@ from .prompt import build_system_prompt, build_wake_input
 from .providers import LanguageProvider, ProviderError
 from .storage import SQLiteStore
 from .tools import ToolRegistry
+
+logger = logging.getLogger(__name__)
 
 
 class WakeProtocolError(ValueError):
@@ -56,17 +59,27 @@ class WakeEngine:
             return WakeResult(0, f"skipped:{gate.reason}", False, next_at)
 
         cycle_id = self.store.start_cycle(seed.kind, seed.summary, now)
+        logger.info("wake started cycle_id=%s trigger_kind=%r", cycle_id, seed.kind[:64])
         evidence: list[ToolEvidence] = []
         try:
             draft = self._conversation(seed, cycle_id, evidence, now)
             result = self._commit(cycle_id, draft, evidence, now)
             self.store.finish_cycle(cycle_id, status="completed", outcome=result.outcome, now=now)
             self.policy.mark_wake(now)
+            logger.info(
+                "wake completed cycle_id=%s outcome=%s notified=%s tool_calls=%s next_wake_at=%s",
+                cycle_id, result.outcome, result.notified, len(evidence),
+                result.next_wake_at.isoformat(),
+            )
             return result
         except (ProviderError, WakeProtocolError) as exc:
             code = str(exc)[:160] or type(exc).__name__
             self.store.finish_cycle(cycle_id, status="failed", error_code=code, now=now)
             retry_at = self.policy.choose_next(now)
+            logger.warning(
+                "wake failed cycle_id=%s error_code=%r next_wake_at=%s",
+                cycle_id, code, retry_at.isoformat(),
+            )
             return WakeResult(cycle_id, "error", False, retry_at)
         finally:
             self.store.release_lease("wake_cycle", lease_owner)
@@ -144,11 +157,14 @@ class WakeEngine:
         share = proposed_share
         notified = False
         outcome = draft.outcome
+        notification_reason = "not_requested"
         if outcome == "message":
             if self.policy.is_duplicate(share):
+                notification_reason = "duplicate"
                 share = ""
                 outcome = "trace"
             elif not self.policy.can_notify(now):
+                notification_reason = "quiet_hours"
                 outcome = "trace"
             else:
                 message_id = uuid.uuid4().hex
@@ -158,10 +174,17 @@ class WakeEngine:
                     message_id=message_id,
                 )
                 if notified:
+                    notification_reason = "sent"
                     self.store.set_state("last_share", share, now)
                     self.policy.mark_push(now)
                 else:
+                    notification_reason = "delivery_failed"
                     outcome = "trace"
+
+        logger.info(
+            "wake decision cycle_id=%s requested_outcome=%s outcome=%s notification_reason=%s",
+            cycle_id, draft.outcome, outcome, notification_reason,
+        )
 
         self.store.replace_residue(draft.residue.strip(), now)
         self.store.add_trace(
@@ -267,3 +290,4 @@ def _assistant_tool_message(turn: ProviderTurn) -> dict[str, Any]:
             for call in turn.tool_calls
         ],
     }
+
