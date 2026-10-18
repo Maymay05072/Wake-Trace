@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "waketrace"
-version = "2.0.0"
+version = "2.1.0"
 description = "A lightweight-continuity wake runtime for relational AI companions."
 readme = "README.md"
 license = "PolyForm-Noncommercial-1.0.0"
@@ -15,6 +15,7 @@ authors = [
   { name = "Chezi" },
 ]
 dependencies = [
+  "anyio>=4.5,<5",
   "fastapi>=0.115,<1",
   "httpx[socks]>=0.27,<1",
   "mcp>=1.12,<2",
@@ -39,3 +40,4 @@ testpaths = ["tests"]
 [tool.ruff]
 line-length = 100
 target-version = "py311"
+

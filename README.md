@@ -17,7 +17,7 @@ WakeTrace 源于一个很简单的愿望：AI 伴侣不应该只在你发来消�
 
 > A lightweight-continuity wake runtime for relational AI companions.
 
-当前版本为 `2.0.0`。2.0 轻量版把运行时、调度器、REST API、MCP 与 Web 行径界面装进同一个
+当前版本为 `2.1.0`。2.0 起的轻量版把运行时、调度器、REST API、MCP 与 Web 行径界面装进同一个
 Docker 容器，同时继续使用一份 SQLite 数据，不另建一套“记忆库”。
 
 ## 为什么做 WakeTrace
@@ -66,6 +66,7 @@ Docker 容器，同时继续使用一份 SQLite 数据，不另建一套“记�
 - 兼容 OpenAI 风格的模型接口
 - 严格的 JSON 最终结果协议
 - 支持真实工具调用，并按调用保存证据
+- 可配置远程 SSE 与 Streamable HTTP MCP 工具，按服务设置工具允许列表
 - 生活事件队列：天气、日历、传感器或宿主事件可以成为真实醒来缘由
 - 最多五根会重新浮现的生活线头，而不是无限增长的任务清单
 - 可保存自主完成的纯文本与 Markdown 小作品
@@ -324,7 +325,7 @@ curl -X POST http://127.0.0.1:8765/world/events \
 MCP 地址是 `http://127.0.0.1:8765/mcp`，使用 `WAKETRACE_MCP_TOKEN` 作为 Bearer Token。它不是模型
 API 代理，也不会接管第三方聊天客户端的每一轮请求。
 
-客户端中已配置的外部 MCP 工具不会自动供 WakeTrace 唤醒引擎使用；当前版本需通过代码适配并注册工具。
+客户端中已配置的外部 MCP 工具不会自动供 WakeTrace 唤醒引擎使用；需要在后端单独配置，见[接入外部 MCP 工具](#接入外部-mcp-工具)。
 
 不同客户端的配置界面名称可能不同，核心配置都是 MCP URL 与 Authorization Header，例如：
 
@@ -447,6 +448,72 @@ WakeTrace 不把“有生命力”理解为更频繁地说话，而是让醒来�
 如果你想把 WakeTrace 融入天气、日历、聊天、互动作品、收藏馆或自己的 PWA，可以从
 [从唤醒核心到一整个生活世界](docs/integration-guide.md) 开始。它说明了哪些模块可以直接使用，
 哪些能力应写在宿主应用，以及我们自用系统采用的组合思路。
+
+## 接入外部 MCP 工具
+
+WakeTrace 可以作为 MCP 客户端，连接使用者自行选择的远程工具服务。支持旧版 SSE 与 Streamable HTTP，
+不指定任何记忆库或论坛服务。它与供聊天客户端连接的 `/mcp` 入口方向不同；配置工具也不会自动导入
+Kelivo 的聊天、人设或记忆。外部工具只供 WakeTrace 后端执行的唤醒使用，外部客户端完成醒来的实验路径
+仍使用该客户端自己配置的工具。
+
+创建一份 JSON 配置文件，例如 `mcp-tools.json`：
+
+```json
+{
+  "servers": {
+    "memory": {
+      "transport": "sse",
+      "url": "https://memory.example.com/sse",
+      "token_env": "MEMORY_MCP_TOKEN",
+      "allowed_tools": ["search_memory"]
+    },
+    "calendar": {
+      "transport": "streamable_http",
+      "url": "https://calendar.example.com/mcp",
+      "headers_env": {"X-API-Key": "CALENDAR_MCP_KEY"},
+      "allowed_tools": ["list_events"],
+      "timeout_seconds": 20,
+      "max_result_chars": 4000
+    }
+  }
+}
+```
+
+地址、连接方式与工具名称以服务提供方的说明为准，示例地址不能直接使用。`allowed_tools` 必填且不能为空，
+只有该列表中的工具会提供给模型，不支持通配符。服务名限 1–24 位英文字母、数字、下划线或连字符。
+模型看到的工具名自动带服务前缀与短哈希，避免多个服务重名；允许列表仍填写服务原始工具名。
+
+在**运行 WakeTrace 后端的环境**配置：
+
+```env
+WAKETRACE_EXTERNAL_MCP_CONFIG=/实际路径/mcp-tools.json
+MEMORY_MCP_TOKEN=服务提供方给你的令牌
+CALENDAR_MCP_KEY=另一个服务的密钥
+```
+
+`token_env` 自动添加 `Authorization: Bearer ...`；`headers_env` 从环境变量读取完整 Header 值，适合
+其他鉴权方式。无需鉴权的服务省略这两项。密钥不要直接写入 JSON、URL 或提交到仓库。鉴权需使用
+Header，当前不接受带查询参数、用户名密码或片段的 URL，也不支持 OAuth 登录与本地 stdio 服务。
+公网连接使用 HTTPS。
+
+Python 部署时，也可把上述变量写入后端 `.env`。自定义鉴权变量必须导出到进程环境中，或由部署平台
+注入；`Settings` 只加载带 `WAKETRACE_` 前缀的设置，不会把 `.env` 中任意变量自动导出。
+Docker 可把配置文件放进已有的 `./data/` 目录，设置容器路径为 `/data/mcp-tools.json`。仓库的 Compose
+已通过 `env_file` 将 `.env` 中的自定义鉴权变量注入容器，无需修改 Compose。Zeabur 等平台则需确保配置文件确实存在于容器中的对应路径，
+再在服务变量中设置路径与鉴权变量。修改配置后重启服务。
+
+工具列表在首次唤醒时发现；服务连接失败不影响内置工具，最早在 60 秒后的下一次唤醒重试发现。
+配置文件不存在或格式错误会明确报错，避免以为配置已生效。允许的工具未找到时会记录缺失数量；
+修改服务上的工具列表后重启 WakeTrace 重新发现。
+
+每次工具调用使用独立连接，断线后下一次调用会重新连接；失败的调用不会自动重试，避免重复写入。
+发现与单次调用默认各限 20 秒，可设置 0.1–120 秒。一次发现最多读取十页工具，最多配置 16 个服务、
+每个服务允许 64 个工具。返回给模型与保存的结果默认限 4000 字符，可设置 256–16000 字符；超长结果
+标记截断，图片等非文本内容省略。唤醒引擎另外保留每条工具上下文 4000 字符的上限。
+
+外部工具仍可能读写该服务中账号能访问的资料，请只允许你希望它自主使用的工具。调用是否成功由真实
+MCP 返回决定；参数和经过限长的工具结果会保存在本地工具记录中，普通运行日志不输出这些正文或鉴权信息。
+模型是否调用工具仍由当前生活种子决定，接入工具不会强制每次唤醒活动或发送消息。
 
 ## 接入一个真实工具
 

@@ -15,6 +15,7 @@ from pydantic import BaseModel, Field, field_validator
 from . import __version__
 from .config import Settings
 from .engine import WakeEngine
+from .external_mcp import with_external_mcp
 from .lifeworld import build_lifeworld_tools
 from .mcp_server import build_mcp_server
 from .models import WakeSeed
@@ -65,7 +66,7 @@ def create_app(
             settings,
             store,
             OpenAICompatibleProvider(settings),
-            build_lifeworld_tools(store),
+            with_external_mcp(build_lifeworld_tools(store), settings),
             WebPushNotifier(settings, store),
         )
 
@@ -199,3 +200,4 @@ def create_app(
         app.mount("/", StaticFiles(directory=settings.web_dist_path, html=True), name="web")
 
     return app
+

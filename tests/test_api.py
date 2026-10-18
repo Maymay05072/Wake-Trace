@@ -2,6 +2,7 @@ from datetime import UTC, datetime, timedelta
 
 from fastapi.testclient import TestClient
 
+from waketrace import __version__
 from waketrace.api import create_app
 from waketrace.config import Settings
 from waketrace.engine import WakeEngine
@@ -35,7 +36,7 @@ def test_status_is_fail_closed_and_health_is_public(tmp_path):
 
     health = client.get("/health")
     assert health.status_code == 200
-    assert health.json()["version"] == "2.0.0"
+    assert health.json()["version"] == __version__
     assert client.get("/status").status_code == 401
     response = client.get(
         "/status", headers={"Authorization": "Bearer a-long-test-token"}
@@ -319,3 +320,4 @@ def test_mcp_external_wake_commits_a_trace(tmp_path):
         )
         assert finished["ok"] is True
         assert engine.store.recent_timeline(1)[0]["fact"] == "接住了一个关于雨天阅读的聊天线索。"
+

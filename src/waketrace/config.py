@@ -35,6 +35,7 @@ class Settings(BaseSettings):
     temperature: float = Field(default=0.7, ge=0, le=2)
     max_tokens: int = Field(default=1200, ge=128, le=8192)
     max_tool_rounds: int = Field(default=4, ge=0, le=8)
+    external_mcp_config: Path | None = None
     recent_fact_limit: int = Field(default=8, ge=1, le=30)
     residue_ttl_hours: int = Field(default=24, ge=1, le=168)
 
@@ -47,6 +48,11 @@ class Settings(BaseSettings):
 
     vapid_private_key: str = ""
     vapid_claims_email: str = "mailto:admin@example.com"
+
+    @field_validator("external_mcp_config", mode="before")
+    @classmethod
+    def optional_mcp_path(cls, value):
+        return None if isinstance(value, str) and not value.strip() else value
 
     @field_validator("timezone")
     @classmethod
@@ -64,3 +70,4 @@ class Settings(BaseSettings):
 
     def ensure_runtime_dirs(self) -> None:
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
+

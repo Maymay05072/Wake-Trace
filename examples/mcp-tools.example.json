@@ -1,0 +1,12 @@
+{
+  "servers": {
+    "my_service": {
+      "transport": "streamable_http",
+      "url": "https://your-mcp-service.example.com/mcp",
+      "token_env": "MY_MCP_TOKEN",
+      "allowed_tools": ["replace_with_real_tool_name"],
+      "timeout_seconds": 20,
+      "max_result_chars": 4000
+    }
+  }
+}

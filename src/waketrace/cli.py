@@ -11,6 +11,7 @@ import uvicorn
 from .api import create_app
 from .config import Settings
 from .engine import WakeEngine
+from .external_mcp import with_external_mcp
 from .lifeworld import build_lifeworld_tools
 from .models import WakeSeed
 from .notifiers import ConsoleNotifier, WebPushNotifier
@@ -27,7 +28,7 @@ def build_engine(settings: Settings, *, console: bool = False) -> WakeEngine:
         settings,
         store,
         OpenAICompatibleProvider(settings),
-        build_lifeworld_tools(store),
+        with_external_mcp(build_lifeworld_tools(store), settings),
         notifier,
     )
 
